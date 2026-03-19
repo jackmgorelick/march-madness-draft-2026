@@ -683,35 +683,38 @@ function getDraftedPlayersFromCollege(college) {
   return players;
 }
 
-// Fetch today's scoreboard
+// Fetch tournament scoreboard — scans today + recent days to catch First Four, etc.
 async function fetchScoreboard() {
   try {
-    // Fetch today and also check for tournament games
-    // groups=100 filters to NCAA tournament games
+    const allEvents = [];
+    const seenIds = new Set();
     const today = new Date();
-    const dateStr = today.getFullYear() + String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0');
 
-    const url = `${ESPN_SCOREBOARD}?dates=${dateStr}&groups=100&limit=100`;
-    addLog(`Fetching scoreboard: ${dateStr}`);
+    // Scan today and the past 3 days to catch First Four and multi-day rounds
+    for (let daysBack = 0; daysBack <= 3; daysBack++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - daysBack);
+      const dateStr = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
 
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`Scoreboard HTTP ${resp.status}`);
-    const data = await resp.json();
+      const url = `${ESPN_SCOREBOARD}?dates=${dateStr}&groups=100&limit=100`;
+      if (daysBack === 0) addLog(`Fetching scoreboard: ${dateStr} (+ ${3} prior days)`);
 
-    const events = data.events || [];
-    addLog(`Found ${events.length} tournament games today`);
-
-    // If no tournament games, try without the group filter (might be regular season)
-    if (events.length === 0) {
-      const url2 = `${ESPN_SCOREBOARD}?dates=${dateStr}&limit=100`;
-      const resp2 = await fetch(url2);
-      if (resp2.ok) {
-        const data2 = await resp2.json();
-        return data2.events || [];
-      }
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const events = data.events || [];
+        for (const ev of events) {
+          if (!seenIds.has(ev.id)) {
+            seenIds.add(ev.id);
+            allEvents.push(ev);
+          }
+        }
+      } catch(e) { /* skip failed day */ }
     }
 
-    return events;
+    addLog(`Found ${allEvents.length} tournament games across all days`);
+    return allEvents;
   } catch (err) {
     addLog(`Scoreboard error: ${err.message}`);
     return [];
