@@ -1112,34 +1112,19 @@ function renderStandings() {
         </div>
       ` : ''}
     </div>
-    <div class="grid-2">
-      <div class="card">
-        <h2>Team Standings</h2>
-        <table>
-          <tr><th>#</th><th>Team</th><th>Active</th><th style="text-align:right">Points</th></tr>
-          ${sorted.map((t,i) => `
-            <tr>
-              <td class="rank">${i+1}</td>
-              <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TEAM_COLORS[t.idx]};margin-right:8px;"></span>${t.name}</td>
-              <td><span style="color:var(--green)">${getActivePlayers(t).length}</span>/<span style="color:var(--muted)">${t.players.length}</span></td>
-              <td class="pts" style="text-align:right">${getTeamScore(t)}</td>
-            </tr>
-          `).join('')}
-        </table>
-      </div>
-      <div class="card">
-        <h2>Points by Team</h2>
-        <div class="bar-chart">
-          ${sorted.map((t,i) => `
-            <div class="bar-row">
-              <div class="bar-label">${t.name}</div>
-              <div class="bar-track">
-                <div class="bar-fill" style="width:${Math.max(getTeamScore(t)/maxScore*100,2)}%;background:${TEAM_COLORS[t.idx]};">${getTeamScore(t)}</div>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
+    <div class="card">
+      <h2>Team Standings</h2>
+      <table>
+        <tr><th>#</th><th>Team</th><th>Active</th><th style="text-align:right">Points</th></tr>
+        ${sorted.map((t,i) => `
+          <tr>
+            <td class="rank">${i+1}</td>
+            <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TEAM_COLORS[t.idx]};margin-right:8px;"></span>${t.name}</td>
+            <td><span style="color:var(--green)">${getActivePlayers(t).length}</span>/<span style="color:var(--muted)">${t.players.length}</span></td>
+            <td class="pts" style="text-align:right">${getTeamScore(t)}</td>
+          </tr>
+        `).join('')}
+      </table>
     </div>
     <div class="card" style="margin-top:20px;">
       <h2>Top 15 Scorers</h2>
