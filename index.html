@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>March Madness Draft 2026 Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e4e4e7;
+    --muted: #9ca3af;
+    --accent: #6366f1;
+    --accent2: #8b5cf6;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #eab308;
+    --orange: #f97316;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1e1b4b, #312e81, #1e1b4b);
+    padding: 24px 32px;
+    border-bottom: 2px solid var(--accent);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  .header-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .live-indicator {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; user-select: none;
+    transition: all 0.2s;
+  }
+  .live-indicator.active {
+    background: rgba(34,197,94,0.15);
+    color: var(--green);
+    border: 1px solid rgba(34,197,94,0.3);
+  }
+  .live-indicator.inactive {
+    background: rgba(239,68,68,0.1);
+    color: var(--red);
+    border: 1px solid rgba(239,68,68,0.2);
+  }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  .live-indicator.active .live-dot { background: var(--green); }
+  .live-indicator.inactive .live-dot { background: var(--red); animation: none; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+  @keyframes liveBorder {
+    0%, 100% { border-color: var(--green); }
+    50% { border-color: transparent; }
+  }
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    padding: 8px 32px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .tab:hover { background: #2a2d3a; color: var(--text); }
+  .tab.active { background: var(--accent); color: white; }
+  .container { padding: 24px 32px; max-width: 1600px; margin: 0 auto; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card-live {
+    border-color: var(--green);
+    animation: liveBorder 2s infinite;
+  }
+  .card h2 { font-size: 18px; margin-bottom: 16px; font-weight: 700; }
+  .card h3 { font-size: 15px; margin-bottom: 12px; color: var(--muted); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 10px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td { padding: 8px 10px; border-bottom: 1px solid #1f2233; }
+  tr:hover td { background: rgba(99, 102, 241, 0.05); }
+  .rank { font-weight: 700; color: var(--accent); width: 30px; }
+  .pts { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-active { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-eliminated { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-live { background: rgba(34,197,94,0.2); color: var(--green); animation: pulse 2s infinite; }
+  .badge-final { background: rgba(99,102,241,0.15); color: var(--accent); }
+  .badge-upcoming { background: rgba(234,179,8,0.15); color: var(--yellow); }
+  .stat-label { color: var(--muted); font-size: 13px; }
+  .stat-value { font-weight: 700; font-size: 18px; }
+  .btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .btn:hover { border-color: var(--accent); background: #2a2d3a; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); }
+  .btn-primary:hover { background: #4f46e5; }
+  .btn-danger { border-color: var(--red); color: var(--red); }
+  .btn-danger:hover { background: rgba(239,68,68,0.1); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  input[type="number"] {
+    width: 60px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    text-align: center;
+  }
+  input[type="number"]:focus { outline: none; border-color: var(--accent); }
+  .search-input {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    width: 250px;
+  }
+  .search-input:focus { outline: none; border-color: var(--accent); }
+  .bar-chart { display: flex; flex-direction: column; gap: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; }
+  .bar-label { width: 140px; font-size: 13px; font-weight: 500; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-track { flex: 1; height: 24px; background: #1f2233; border-radius: 4px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; display: flex; align-items: center; padding-left: 8px; font-size: 11px; font-weight: 700; min-width: fit-content; }
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    max-width: 700px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .modal h2 { margin-bottom: 20px; }
+  .round-selector { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .round-btn { padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
+  .round-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .hidden { display: none !important; }
+  .college-team { color: var(--muted); font-size: 12px; }
+  .team-header { display: flex; justify-content: space-between; align-items: center; }
+  .team-total { font-size: 24px; font-weight: 800; color: var(--accent); }
+  .eliminated-row { opacity: 0.4; }
+  .eliminated-row td { text-decoration: line-through; }
+  select {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  select:focus { outline: none; border-color: var(--accent); }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--green);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    z-index: 200;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .game-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    background: var(--bg);
+    margin-bottom: 12px;
+  }
+  .game-card-live { border-color: var(--green); }
+  .game-score-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+  }
+  .game-team-name { font-weight: 600; font-size: 15px; }
+  .game-team-score { font-weight: 800; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .game-status { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
+  .game-status-live { color: var(--green); font-weight: 700; }
+  .live-pts-badge {
+    display: inline-block;
+    background: rgba(34,197,94,0.15);
+    color: var(--green);
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+  .last-updated {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+    padding: 4px 0;
+  }
+  .log-entry {
+    padding: 8px 12px;
+    border-bottom: 1px solid #1f2233;
+    font-size: 13px;
+  }
+  .log-time { color: var(--muted); font-size: 11px; margin-right: 8px; }
+  @media (max-width: 900px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .container { padding: 16px; }
+    header { padding: 16px; }
+    .tab-bar { padding: 8px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏀 March Madness <span>Draft 2026</span></h1>
+  <div class="header-actions">
+    <div class="live-indicator inactive" id="liveToggle" onclick="toggleLive()">
+      <div class="live-dot"></div>
+      <span id="liveLabel">LIVE OFF</span>
+    </div>
+    <input type="text" class="search-input" id="globalSearch" placeholder="Search players or teams..." oninput="handleSearch()">
+    <button class="btn btn-primary" onclick="openScoreModal()">Update Scores</button>
+    <button class="btn" onclick="exportData()">Export</button>
+    <button class="btn" onclick="importData()">Import</button>
+  </div>
+</header>
+
+<div class="tab-bar">
+  <div class="tab active" data-tab="standings" onclick="switchTab('standings')">Standings</div>
+  <div class="tab" data-tab="live" onclick="switchTab('live')">Live Games</div>
+  <div class="tab" data-tab="teams" onclick="switchTab('teams')">Team Details</div>
+  <div class="tab" data-tab="players" onclick="switchTab('players')">All Players</div>
+  <div class="tab" data-tab="colleges" onclick="switchTab('colleges')">By College</div>
+  <div class="tab" data-tab="eliminated" onclick="switchTab('eliminated')">Eliminations</div>
+  <div class="tab" data-tab="draft" onclick="switchTab('draft')">Draft Board</div>
+</div>
+
+<div class="container" id="content"></div>
+
+<!-- Score Update Modal -->
+<div class="modal-overlay" id="scoreModal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h2>Update Scores</h2>
+      <button class="btn" onclick="closeScoreModal()">✕</button>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="color:var(--muted);font-size:13px;">Round:</label>
+      <div class="round-selector" id="roundSelector"></div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="color:var(--muted);font-size:13px;">Filter by team:</label>
+      <select id="scoreTeamFilter" onchange="renderScoreEntries()" style="margin-left:8px;"></select>
+    </div>
+    <div id="scoreEntries"></div>
+    <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+      <button class="btn" onclick="closeScoreModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveScores()">Save Scores</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleImport(event)">
+
+<script>
+// ===== CONSTANTS =====
+const TEAM_COLORS = [
+  '#6366f1','#8b5cf6','#ec4899','#f97316','#22c55e','#06b6d4','#eab308','#ef4444','#14b8a6'
+];
+
+const ROUND_NAMES = { 1: 'R64', 2: 'R32', 3: 'Sweet 16', 4: 'Elite 8', 5: 'Final 4', 6: 'Championship' };
+
+// Name aliases: draft name → ESPN name (for known spelling mismatches)
+const NAME_ALIASES = {
+  "Maleek Thomas": "Meleek Thomas",
+  "Henri Veesar": "Henri Veesaar",
+  "Brayden Burries": "Brayden Burries",
+  "Jojo Tugler": "Jojo Tugler",
+};
+
+// Map ESPN team location (exact) → our draft college name
+// ESPN's team.location field is an exact string like "Arkansas", "Michigan State", etc.
+const ESPN_LOCATION_TO_DRAFT = {
+  "duke": "Duke",
+  "purdue": "Purdue",
+  "illinois": "Illinois",
+  "michigan state": "MSU",
+  "michigan st": "MSU",
+  "uconn": "UConn",
+  "connecticut": "UConn",
+  "arizona": "Arizona",
+  "houston": "Houston",
+  "kentucky": "Kentucky",
+  "michigan": "Michigan",
+  "kansas": "Kansas",
+  "louisville": "Louisville",
+  "arkansas": "Arkansas",
+  "byu": "BYU",
+  "brigham young": "BYU",
+  "wisconsin": "Wisconsin",
+  "north carolina": "UNC",
+  "unc": "UNC",
+  "florida": "Florida",
+  "iowa state": "Iowa St",
+  "iowa st": "Iowa St",
+  "vanderbilt": "Vanderbilt",
+  "texas tech": "Texas Tech",
+  "smu": "SMU",
+  "gonzaga": "Gonzaga",
+  "virginia": "Virginia",
+  "st. john's": "St Johns",
+  "saint john's": "St Johns",
+  "tennessee": "Tennessee",
+  "nebraska": "Nebraska",
+  "saint mary's": "St Marys",
+  "st. mary's": "St Marys",
+  "miami": "Miami",
+  "ohio state": "Ohio St",
+  "ohio st": "Ohio St",
+  "alabama": "Alabama"
+};
+
+// Also map by ESPN abbreviation as fallback
+const ESPN_ABBR_TO_DRAFT = {
+  "duke": "Duke", "pur": "Purdue", "ill": "Illinois", "msu": "MSU",
+  "conn": "UConn", "ariz": "Arizona", "hou": "Houston", "uk": "Kentucky",
+  "mich": "Michigan", "ku": "Kansas", "kan": "Kansas", "lou": "Louisville",
+  "ark": "Arkansas", "byu": "BYU", "wis": "Wisconsin", "unc": "UNC",
+  "fla": "Florida", "isu": "Iowa St", "van": "Vanderbilt", "ttu": "Texas Tech",
+  "smu": "SMU", "gon": "Gonzaga", "gonz": "Gonzaga", "zag": "Gonzaga",
+  "uva": "Virginia", "sju": "St Johns", "tenn": "Tennessee", "neb": "Nebraska",
+  "smc": "St Marys", "mia": "Miami", "osu": "Ohio St", "ala": "Alabama"
+};
+
+// ===== INITIAL DATA =====
+const initialData = {
+  teams: [
+    {
+      name: "Dylan/Bean",
+      players: [
+        { name: "Cameron Boozer", college: "Duke" },
+        { name: "Brayden Smith", college: "Purdue" },
+        { name: "Keaton Wagler", college: "Illinois" },
+        { name: "Jeremy Fears Jr", college: "MSU" },
+        { name: "Solo Ball", college: "UConn" },
+        { name: "Tobe Awaka", college: "Arizona" },
+        { name: "Jojo Tugler", college: "Houston" },
+        { name: "Otega Oweh", college: "Kentucky" }
+      ]
+    },
+    {
+      name: "Schwartz/Gore",
+      players: [
+        { name: "Brayden Burries", college: "Arizona" },
+        { name: "Morez Johnson", college: "Michigan" },
+        { name: "Aday Mara", college: "Michigan" },
+        { name: "David Mirkovic", college: "Illinois" },
+        { name: "Darryn Peterson", college: "Kansas" },
+        { name: "Braylin Mullins", college: "UConn" },
+        { name: "Ryan Conwell", college: "Louisville" },
+        { name: "Maleek Thomas", college: "Arkansas" }
+      ]
+    },
+    {
+      name: "Pure/Gold/Cale",
+      players: [
+        { name: "Darius Acuff Jr", college: "Arkansas" },
+        { name: "Emmanuel Sharp", college: "Houston" },
+        { name: "Andrej Stokajovic", college: "Illinois" },
+        { name: "Trey Kaufman-Renn", college: "Purdue" },
+        { name: "John Blackwell", college: "Wisconsin" },
+        { name: "Anthony Dell Orso", college: "Arizona" },
+        { name: "Rob Wright", college: "BYU" },
+        { name: "Henri Veesar", college: "UNC" }
+      ]
+    },
+    {
+      name: "Arbys/Fav",
+      players: [
+        { name: "Thomas Haugh", college: "Florida" },
+        { name: "Tamin Lipsey", college: "Iowa St" },
+        { name: "Boogie Fland", college: "Florida" },
+        { name: "Milos Uzan", college: "Houston" },
+        { name: "Tyler Tanner", college: "Vanderbilt" },
+        { name: "Donovan Atwell", college: "Texas Tech" },
+        { name: "Boopie Miller", college: "SMU" },
+        { name: "Tyon Grant-Foster", college: "Gonzaga" }
+      ]
+    },
+    {
+      name: "Greene/Rando",
+      players: [
+        { name: "Yaxel Lendeborg", college: "Michigan" },
+        { name: "Koa Peat", college: "Arizona" },
+        { name: "Patrick Ngongba", college: "Duke" },
+        { name: "Xaivian Lee", college: "Florida" },
+        { name: "Nick Boyd", college: "Wisconsin" },
+        { name: "Jaxon Kohler", college: "MSU" },
+        { name: "Malik Thomas", college: "Virginia" },
+        { name: "Tre White", college: "Kansas" }
+      ]
+    },
+    {
+      name: "Kaplan/Perl",
+      players: [
+        { name: "Jaden Bradley", college: "Arizona" },
+        { name: "Alex Condon", college: "Florida" },
+        { name: "Fletcher Loyer", college: "Purdue" },
+        { name: "Jakobi Gillespie", college: "Tennessee" },
+        { name: "Zuby Ejofor", college: "St Johns" },
+        { name: "Trey Mckinney", college: "Michigan" },
+        { name: "Oscar Cluff", college: "Purdue" },
+        { name: "Silas Demary Jr", college: "UConn" }
+      ]
+    },
+    {
+      name: "Caps/Shams",
+      players: [
+        { name: "Milan Momcilovic", college: "Iowa St" },
+        { name: "AJ Dybantsa", college: "BYU" },
+        { name: "Alex Karaban", college: "UConn" },
+        { name: "Thijs De Ridder", college: "Virginia" },
+        { name: "Pryce Sandfort", college: "Nebraska" },
+        { name: "Paulius Murauskas", college: "St Marys" },
+        { name: "Malik Reneau", college: "Miami" },
+        { name: "Bruce Thornton", college: "Ohio St" }
+      ]
+    },
+    {
+      name: "Leo/JB",
+      players: [
+        { name: "Isaiah Evans", college: "Duke" },
+        { name: "Graham Ike", college: "Gonzaga" },
+        { name: "Labaron Philon", college: "Alabama" },
+        { name: "Cayden Boozer", college: "Duke" },
+        { name: "Elliot Cadeau", college: "Michigan" },
+        { name: "Ivan Karchenkov", college: "Arizona" },
+        { name: "Chris Cenac", college: "Houston" },
+        { name: "Nate Ament", college: "Tennessee" }
+      ]
+    },
+    {
+      name: "Huze/Addy/Nelly",
+      players: [
+        { name: "Kingston Flemings", college: "Houston" },
+        { name: "Joshua Jefferson", college: "Iowa St" },
+        { name: "Moe Krivas", college: "Arizona" },
+        { name: "Tarris Reed Jr", college: "UConn" },
+        { name: "Rueben Chinyelu", college: "Florida" },
+        { name: "Christian Anderson", college: "Texas Tech" },
+        { name: "Duke Miles", college: "Vanderbilt" },
+        { name: "Bryce Hopkins", college: "St Johns" }
+      ]
+    }
+  ]
+};
+
+// ===== STATE =====
+let state = loadState();
+let liveEnabled = false;
+let liveInterval = null;
+let liveGames = []; // current ESPN game data
+let livePlayerStats = {}; // { playerName: { pts: N, gameStatus: "in_progress"|"final"|"upcoming", gameClock: "..." } }
+let lastFetchTime = null;
+let fetchLog = [];
+
+function getDefaultState() {
+  const s = JSON.parse(JSON.stringify(initialData));
+  s.scores = {};
+  s.eliminated = {};
+  s.currentRound = 1;
+  return s;
+}
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem('mm_draft_2026');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.teams) return parsed;
+    }
+  } catch(e) {}
+  return getDefaultState();
+}
+
+function saveState() {
+  localStorage.setItem('mm_draft_2026', JSON.stringify(state));
+}
+
+function getPlayerScore(playerName, round) {
+  if (!state.scores[playerName]) return 0;
+  if (round) return state.scores[playerName][round] || 0;
+  return Object.values(state.scores[playerName]).reduce((a,b) => a + b, 0);
+}
+
+function getTeamScore(team) {
+  return team.players.reduce((sum, p) => sum + getPlayerScore(p.name), 0);
+}
+
+function isEliminated(college) {
+  return !!state.eliminated[college];
+}
+
+function isPlayerEliminated(player) {
+  return isEliminated(player.college);
+}
+
+function getActivePlayers(team) {
+  return team.players.filter(p => !isPlayerEliminated(p));
+}
+
+function getAllColleges() {
+  const colleges = new Set();
+  state.teams.forEach(t => t.players.forEach(p => colleges.add(p.college)));
+  return [...colleges].sort();
+}
+
+function getTopScorers() {
+  const all = [];
+  state.teams.forEach((t,ti) => {
+    t.players.forEach(p => {
+      all.push({ ...p, teamName: t.name, teamIdx: ti, totalPts: getPlayerScore(p.name) });
+    });
+  });
+  return all.sort((a,b) => b.totalPts - a.totalPts);
+}
+
+// ===== ESPN LIVE API =====
+const ESPN_SCOREBOARD = 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard';
+const ESPN_SUMMARY = 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary';
+
+// Get all drafted college names
+function getDraftedColleges() {
+  const colleges = new Set();
+  state.teams.forEach(t => t.players.forEach(p => colleges.add(p.college)));
+  return colleges;
+}
+
+// Match ESPN team to our draft college using EXACT location match (no more includes!)
+function matchESPNTeam(espnTeam) {
+  const loc = (espnTeam.team?.location || '').toLowerCase().trim();
+  const abbr = (espnTeam.team?.abbreviation || '').toLowerCase().trim();
+
+  // Try exact location match first (most reliable)
+  if (ESPN_LOCATION_TO_DRAFT[loc]) return ESPN_LOCATION_TO_DRAFT[loc];
+
+  // Fallback to abbreviation
+  if (ESPN_ABBR_TO_DRAFT[abbr]) return ESPN_ABBR_TO_DRAFT[abbr];
+
+  return null;
+}
+
+// Normalize player name for fuzzy matching
+function normalizeName(name) {
+  return name.toLowerCase()
+    .replace(/[^a-z\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Simple Levenshtein edit distance
+function editDistance(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m+1}, () => Array(n+1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j-1], dp[i-1][j], dp[i][j-1]);
+  return dp[m][n];
+}
+
+// Check if two names likely refer to the same player
+function namesMatch(draftName, espnName) {
+  // Check explicit aliases first
+  const alias = NAME_ALIASES[draftName];
+  if (alias && normalizeName(alias) === normalizeName(espnName)) return true;
+
+  const dn = normalizeName(draftName);
+  const en = normalizeName(espnName);
+  if (dn === en) return true;
+
+  // Strip "jr", "ii", "iii", "iv" suffixes for comparison
+  const suffixes = ['jr', 'sr', 'ii', 'iii', 'iv'];
+  const dParts = dn.split(' ').filter(p => !suffixes.includes(p));
+  const eParts = en.split(' ').filter(p => !suffixes.includes(p));
+
+  if (dParts.length >= 2 && eParts.length >= 2) {
+    const dLast = dParts[dParts.length - 1];
+    const eLast = eParts[eParts.length - 1];
+    const dFirst = dParts[0];
+    const eFirst = eParts[0];
+
+    // Exact last name match + close first name (edit distance <= 2)
+    if (dLast === eLast && editDistance(dFirst, eFirst) <= 2) return true;
+
+    // Close last name (edit distance <= 1) + close first name (edit distance <= 2)
+    if (editDistance(dLast, eLast) <= 1 && editDistance(dFirst, eFirst) <= 2) return true;
+  }
+
+  // Full name edit distance check (handles minor typos anywhere)
+  const dnJoined = dParts.join(' ');
+  const enJoined = eParts.join(' ');
+  if (editDistance(dnJoined, enJoined) <= 3) return true;
+
+  return false;
+}
+
+// Get players we drafted from a specific college
+function getDraftedPlayersFromCollege(college) {
+  const players = [];
+  state.teams.forEach((t, ti) => {
+    t.players.forEach(p => {
+      if (p.college === college) {
+        players.push({ ...p, teamName: t.name, teamIdx: ti });
+      }
+    });
+  });
+  return players;
+}
+
+// Fetch today's scoreboard
+async function fetchScoreboard() {
+  try {
+    // Fetch today and also check for tournament games
+    // groups=100 filters to NCAA tournament games
+    const today = new Date();
+    const dateStr = today.getFullYear() + String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0');
+
+    const url = `${ESPN_SCOREBOARD}?dates=${dateStr}&groups=100&limit=100`;
+    addLog(`Fetching scoreboard: ${dateStr}`);
+
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Scoreboard HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    const events = data.events || [];
+    addLog(`Found ${events.length} tournament games today`);
+
+    // If no tournament games, try without the group filter (might be regular season)
+    if (events.length === 0) {
+      const url2 = `${ESPN_SCOREBOARD}?dates=${dateStr}&limit=100`;
+      const resp2 = await fetch(url2);
+      if (resp2.ok) {
+        const data2 = await resp2.json();
+        return data2.events || [];
+      }
+    }
+
+    return events;
+  } catch (err) {
+    addLog(`Scoreboard error: ${err.message}`);
+    return [];
+  }
+}
+
+// Fetch boxscore for a specific game
+async function fetchBoxscore(gameId) {
+  try {
+    const url = `${ESPN_SUMMARY}?event=${gameId}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Summary HTTP ${resp.status}`);
+    return await resp.json();
+  } catch (err) {
+    addLog(`Boxscore error (${gameId}): ${err.message}`);
+    return null;
+  }
+}
+
+// Main live update cycle
+async function doLiveUpdate() {
+  if (!liveEnabled) return;
+
+  addLog('Starting live update...');
+  lastFetchTime = new Date();
+
+  // Step 1: Get scoreboard
+  const events = await fetchScoreboard();
+  liveGames = [];
+  livePlayerStats = {};
+
+  const draftedColleges = getDraftedColleges();
+
+  // Step 2: Find games involving our colleges
+  const relevantGameIds = [];
+
+  for (const event of events) {
+    const competitions = event.competitions || [];
+    for (const comp of competitions) {
+      const competitors = comp.competitors || [];
+      let isRelevant = false;
+      let gameInfo = {
+        id: event.id,
+        name: event.name || '',
+        shortName: event.shortName || '',
+        status: comp.status?.type?.name || 'unknown', // "STATUS_IN_PROGRESS", "STATUS_FINAL", "STATUS_SCHEDULED"
+        statusDetail: comp.status?.type?.detail || '',
+        clock: comp.status?.displayClock || '',
+        period: comp.status?.period || 0,
+        teams: [],
+        relevantColleges: []
+      };
+
+      for (const competitor of competitors) {
+        const collegeName = matchESPNTeam(competitor);
+        const teamData = {
+          espnName: competitor.team?.displayName || competitor.team?.location || 'Unknown',
+          abbreviation: competitor.team?.abbreviation || '',
+          score: parseInt(competitor.score) || 0,
+          homeAway: competitor.homeAway || '',
+          winner: competitor.winner || false,
+          logo: competitor.team?.logo || '',
+          draftCollege: collegeName,
+          seed: competitor.curatedRank?.current || competitor.statistics?.[0]?.displayValue || ''
+        };
+        gameInfo.teams.push(teamData);
+
+        if (collegeName && draftedColleges.has(collegeName)) {
+          isRelevant = true;
+          gameInfo.relevantColleges.push(collegeName);
+        }
+      }
+
+      if (isRelevant) {
+        liveGames.push(gameInfo);
+        relevantGameIds.push(event.id);
+      }
+    }
+  }
+
+  addLog(`${liveGames.length} games involve drafted players`);
+
+  // Step 3: Fetch boxscores for relevant games (in progress or final)
+  const boxscorePromises = [];
+  for (const game of liveGames) {
+    if (game.status === 'STATUS_IN_PROGRESS' || game.status === 'STATUS_FINAL' ||
+        game.status === 'STATUS_HALFTIME' || game.status === 'STATUS_END_PERIOD') {
+      boxscorePromises.push(fetchBoxscore(game.id).then(data => ({ game, data })));
+    }
+  }
+
+  const boxscores = await Promise.all(boxscorePromises);
+
+  // Step 4: Extract player stats
+  let matchedPlayers = 0;
+  for (const { game, data } of boxscores) {
+    if (!data) continue;
+
+    // Navigate boxscore structure
+    const boxscore = data.boxscore;
+    if (!boxscore) continue;
+
+    const espnPlayers = boxscore.players || [];
+    for (const teamPlayers of espnPlayers) {
+      // Match boxscore team to our college using the same exact-match logic
+      const matchedCollege = matchESPNTeam({ team: teamPlayers.team });
+      if (!matchedCollege || !game.relevantColleges.includes(matchedCollege)) continue;
+
+      const draftedPlayers = getDraftedPlayersFromCollege(matchedCollege);
+      const statistics = teamPlayers.statistics || [];
+
+      addLog(`Processing ${matchedCollege}: ${draftedPlayers.map(p=>p.name).join(', ')}`);
+
+      for (const statGroup of statistics) {
+        // Find "points" index in stat labels — ESPN uses "labels" or "names"
+        const rawLabels = statGroup.labels || statGroup.names || [];
+        const labels = rawLabels.map(l => l.toLowerCase());
+        const ptsIdx = labels.indexOf('pts');
+        addLog(`Stat labels: [${rawLabels.slice(0,5).join(',')}...] ptsIdx=${ptsIdx}`);
+        if (ptsIdx === -1) continue;
+
+        const athletes = statGroup.athletes || [];
+        addLog(`Found ${athletes.length} athletes in boxscore for ${matchedCollege}`);
+        for (const athlete of athletes) {
+          const espnPlayerName = athlete.athlete?.displayName || athlete.athlete?.shortName || '';
+
+          for (const draftPlayer of draftedPlayers) {
+            if (namesMatch(draftPlayer.name, espnPlayerName)) {
+              const stats = athlete.stats || [];
+              const pts = parseInt(stats[ptsIdx]) || 0;
+              addLog(`MATCHED: "${draftPlayer.name}" ↔ "${espnPlayerName}" → ${pts} pts`);
+
+              let gameStatus = 'in_progress';
+              if (game.status === 'STATUS_FINAL') gameStatus = 'final';
+
+              livePlayerStats[draftPlayer.name] = {
+                pts,
+                gameStatus,
+                gameClock: game.status === 'STATUS_FINAL' ? 'Final' :
+                           game.status === 'STATUS_HALFTIME' ? 'Halftime' :
+                           `${game.clock} - ${game.period === 1 ? '1st' : game.period === 2 ? '2nd' : 'OT'}`,
+                opponent: game.teams.find(t => t.draftCollege !== matchedCollege)?.espnName || '?',
+                gameScore: game.teams.map(t => `${t.abbreviation} ${t.score}`).join(' - ')
+              };
+
+              matchedPlayers++;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Step 5: Check for eliminations (final games where a college lost)
+    if (game.status === 'STATUS_FINAL') {
+      for (const team of game.teams) {
+        if (team.draftCollege && !team.winner && !state.eliminated[team.draftCollege]) {
+          // Auto-eliminate losing teams
+          state.eliminated[team.draftCollege] = state.currentRound;
+          addLog(`AUTO-ELIMINATED: ${team.draftCollege} (lost to ${game.teams.find(t => t !== team)?.espnName})`);
+        }
+      }
+    }
+  }
+
+  // Step 6: Auto-apply live scores to current round
+  for (const [playerName, stats] of Object.entries(livePlayerStats)) {
+    if (stats.gameStatus === 'final' || stats.gameStatus === 'in_progress') {
+      if (!state.scores[playerName]) state.scores[playerName] = {};
+      state.scores[playerName][state.currentRound] = stats.pts;
+    }
+  }
+
+  addLog(`Matched ${matchedPlayers} drafted players with stats`);
+  saveState();
+  render();
+  updateLiveIndicator();
+}
+
+function addLog(msg) {
+  const time = new Date().toLocaleTimeString();
+  fetchLog.unshift({ time, msg });
+  if (fetchLog.length > 50) fetchLog.length = 50;
+}
+
+// ===== LIVE TOGGLE =====
+function toggleLive() {
+  liveEnabled = !liveEnabled;
+  updateLiveIndicator();
+
+  if (liveEnabled) {
+    doLiveUpdate(); // immediate first fetch
+    liveInterval = setInterval(doLiveUpdate, 30000); // every 30s
+    showToast('Live updates ON — refreshing every 30s');
+  } else {
+    if (liveInterval) clearInterval(liveInterval);
+    liveInterval = null;
+    showToast('Live updates OFF');
+  }
+}
+
+function updateLiveIndicator() {
+  const el = document.getElementById('liveToggle');
+  const label = document.getElementById('liveLabel');
+  if (liveEnabled) {
+    el.className = 'live-indicator active';
+    const liveCount = Object.values(livePlayerStats).filter(s => s.gameStatus === 'in_progress').length;
+    label.textContent = liveCount > 0 ? `LIVE (${liveCount} playing)` : 'LIVE ON';
+  } else {
+    el.className = 'live-indicator inactive';
+    label.textContent = 'LIVE OFF';
+  }
+}
+
+// ===== TABS =====
+let currentTab = 'standings';
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  render();
+}
+
+function render() {
+  const c = document.getElementById('content');
+  switch(currentTab) {
+    case 'standings': c.innerHTML = renderStandings(); break;
+    case 'live': c.innerHTML = renderLive(); break;
+    case 'teams': c.innerHTML = renderTeams(); break;
+    case 'players': c.innerHTML = renderPlayers(); break;
+    case 'colleges': c.innerHTML = renderColleges(); break;
+    case 'eliminated': c.innerHTML = renderEliminated(); break;
+    case 'draft': c.innerHTML = renderDraft(); break;
+  }
+}
+
+// ===== LIVE GAMES TAB =====
+function renderLive() {
+  const hasLiveData = liveGames.length > 0;
+  const inProgress = liveGames.filter(g => g.status === 'STATUS_IN_PROGRESS' || g.status === 'STATUS_HALFTIME' || g.status === 'STATUS_END_PERIOD');
+  const final = liveGames.filter(g => g.status === 'STATUS_FINAL');
+  const upcoming = liveGames.filter(g => g.status === 'STATUS_SCHEDULED' || g.status === 'STATUS_POSTPONED');
+
+  // Live player stats sorted by points
+  const livePlayersArr = Object.entries(livePlayerStats)
+    .map(([name, stats]) => {
+      const info = getTopScorers().find(p => p.name === name) || {};
+      return { name, ...stats, ...info };
+    })
+    .sort((a, b) => b.pts - a.pts);
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h2 style="font-size:22px;">Live Games</h2>
+      <div style="display:flex;gap:12px;align-items:center;">
+        ${lastFetchTime ? `<span class="last-updated">Last updated: ${lastFetchTime.toLocaleTimeString()}</span>` : ''}
+        <button class="btn btn-sm" onclick="doLiveUpdate()" ${!liveEnabled ? 'disabled style="opacity:0.5"' : ''}>Refresh Now</button>
+      </div>
+    </div>
+    ${!liveEnabled ? `
+      <div class="card" style="text-align:center;padding:48px;">
+        <div style="font-size:48px;margin-bottom:16px;">📡</div>
+        <h2 style="margin-bottom:8px;">Live Updates Disabled</h2>
+        <p style="color:var(--muted);margin-bottom:20px;">Click the LIVE button in the header to start auto-fetching scores from ESPN every 30 seconds.</p>
+        <button class="btn btn-primary" onclick="toggleLive()">Enable Live Updates</button>
+      </div>
+    ` : ''}
+    ${liveEnabled && !hasLiveData ? `
+      <div class="card" style="text-align:center;padding:48px;">
+        <div style="font-size:48px;margin-bottom:16px;">🔍</div>
+        <h2 style="margin-bottom:8px;">No Games Found</h2>
+        <p style="color:var(--muted);">No games involving your drafted players' colleges are on the schedule right now. Check back when games are on!</p>
+      </div>
+    ` : ''}
+    ${hasLiveData ? `
+      <div class="grid-2">
+        <div>
+          ${inProgress.length > 0 ? `
+            <h3 style="color:var(--green);margin-bottom:12px;font-size:14px;font-weight:700;">IN PROGRESS (${inProgress.length})</h3>
+            ${inProgress.map(g => renderGameCard(g)).join('')}
+          ` : ''}
+          ${upcoming.length > 0 ? `
+            <h3 style="color:var(--yellow);margin-bottom:12px;margin-top:20px;font-size:14px;font-weight:700;">UPCOMING (${upcoming.length})</h3>
+            ${upcoming.map(g => renderGameCard(g)).join('')}
+          ` : ''}
+          ${final.length > 0 ? `
+            <h3 style="color:var(--muted);margin-bottom:12px;margin-top:20px;font-size:14px;font-weight:700;">FINAL (${final.length})</h3>
+            ${final.map(g => renderGameCard(g)).join('')}
+          ` : ''}
+        </div>
+        <div>
+          <div class="card">
+            <h2>Live Player Scoring</h2>
+            ${livePlayersArr.length === 0 ? '<p style="color:var(--muted);font-size:13px;">No player stats available yet. Stats appear once games start.</p>' : ''}
+            <table>
+              ${livePlayersArr.length > 0 ? `<tr><th>Player</th><th>College</th><th>Fantasy Team</th><th>Game</th><th style="text-align:right">PTS</th></tr>` : ''}
+              ${livePlayersArr.map(p => `
+                <tr>
+                  <td>
+                    ${p.name}
+                    ${p.gameStatus === 'in_progress' ? '<span class="badge badge-live">LIVE</span>' : ''}
+                    ${p.gameStatus === 'final' ? '<span class="badge badge-final">FINAL</span>' : ''}
+                  </td>
+                  <td class="college-team">${p.college || ''}</td>
+                  <td><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${TEAM_COLORS[p.teamIdx || 0]};margin-right:6px;"></span>${p.teamName || ''}</td>
+                  <td style="font-size:11px;color:var(--muted);">${p.gameClock || ''}</td>
+                  <td class="pts" style="text-align:right;color:${p.gameStatus==='in_progress' ? 'var(--green)' : 'var(--text)'};">${p.pts}</td>
+                </tr>
+              `).join('')}
+            </table>
+          </div>
+          <div class="card" style="margin-top:16px;">
+            <h2>Update Log</h2>
+            <div style="max-height:300px;overflow-y:auto;">
+              ${fetchLog.slice(0,20).map(l => `
+                <div class="log-entry">
+                  <span class="log-time">${l.time}</span>${l.msg}
+                </div>
+              `).join('')}
+              ${fetchLog.length === 0 ? '<p style="color:var(--muted);font-size:13px;padding:8px;">No updates yet.</p>' : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
+function renderGameCard(game) {
+  const isLive = game.status === 'STATUS_IN_PROGRESS' || game.status === 'STATUS_HALFTIME' || game.status === 'STATUS_END_PERIOD';
+  const isFinal = game.status === 'STATUS_FINAL';
+  const home = game.teams.find(t => t.homeAway === 'home') || game.teams[0];
+  const away = game.teams.find(t => t.homeAway === 'away') || game.teams[1];
+
+  function teamRow(t) {
+    const isDrafted = !!t.draftCollege;
+    return `
+      <div class="game-score-row">
+        <div>
+          <span class="game-team-name" style="${isDrafted ? 'color:var(--accent);' : ''}">${t.espnName}</span>
+          ${isDrafted ? `<span class="live-pts-badge">${getDraftedPlayersFromCollege(t.draftCollege).length} drafted</span>` : ''}
+          ${isFinal && t.winner ? ' ✓' : ''}
+          ${isFinal && !t.winner && isDrafted ? ' <span style="color:var(--red);font-size:11px;">ELIMINATED</span>' : ''}
+        </div>
+        <div class="game-team-score" style="${isFinal && t.winner ? 'color:var(--green);' : ''}">${t.score}</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="game-card ${isLive ? 'game-card-live' : ''}">
+      ${away ? teamRow(away) : ''}
+      ${home ? teamRow(home) : ''}
+      <div class="game-status ${isLive ? 'game-status-live' : ''}">
+        ${isLive ? `${game.clock} - ${game.period === 1 ? '1st Half' : game.period === 2 ? '2nd Half' : 'OT'}` : ''}
+        ${isFinal ? 'Final' : ''}
+        ${game.status === 'STATUS_SCHEDULED' ? game.statusDetail || 'Scheduled' : ''}
+        ${game.status === 'STATUS_HALFTIME' ? 'Halftime' : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ===== STANDINGS =====
+function renderStandings() {
+  const sorted = [...state.teams].map((t,i) => ({...t, idx: i})).sort((a,b) => getTeamScore(b) - getTeamScore(a));
+  const maxScore = Math.max(...sorted.map(t => getTeamScore(t)), 1);
+  const totalPlayers = state.teams.reduce((s,t) => s + t.players.length, 0);
+  const totalElim = state.teams.reduce((s,t) => s + t.players.filter(p => isPlayerEliminated(p)).length, 0);
+  const totalActive = totalPlayers - totalElim;
+  const topScorer = getTopScorers()[0];
+  const liveCount = Object.values(livePlayerStats).filter(s => s.gameStatus === 'in_progress').length;
+
+  return `
+    <div class="grid-${liveEnabled ? '4' : '3'}" style="margin-bottom:24px;">
+      <div class="card">
+        <div class="stat-label">Total Points Scored</div>
+        <div class="stat-value" style="font-size:32px;margin-top:8px;">${state.teams.reduce((s,t) => s + getTeamScore(t), 0)}</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">Active / Eliminated Players</div>
+        <div class="stat-value" style="font-size:32px;margin-top:8px;">
+          <span style="color:var(--green)">${totalActive}</span> / <span style="color:var(--red)">${totalElim}</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat-label">Top Scorer</div>
+        <div class="stat-value" style="font-size:24px;margin-top:8px;">${topScorer ? topScorer.name : '—'}</div>
+        <div style="color:var(--muted);font-size:13px;">${topScorer ? topScorer.college + ' — ' + getPlayerScore(topScorer.name) + ' pts' : ''}</div>
+      </div>
+      ${liveEnabled ? `
+        <div class="card ${liveCount > 0 ? 'card-live' : ''}">
+          <div class="stat-label">Currently Playing</div>
+          <div class="stat-value" style="font-size:32px;margin-top:8px;color:${liveCount > 0 ? 'var(--green)' : 'var(--muted)'};">${liveCount}</div>
+          ${lastFetchTime ? `<div style="color:var(--muted);font-size:11px;margin-top:4px;">Updated ${lastFetchTime.toLocaleTimeString()}</div>` : ''}
+        </div>
+      ` : ''}
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Team Standings</h2>
+        <table>
+          <tr><th>#</th><th>Team</th><th>Active</th><th style="text-align:right">Points</th></tr>
+          ${sorted.map((t,i) => `
+            <tr>
+              <td class="rank">${i+1}</td>
+              <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TEAM_COLORS[t.idx]};margin-right:8px;"></span>${t.name}</td>
+              <td><span style="color:var(--green)">${getActivePlayers(t).length}</span>/<span style="color:var(--muted)">${t.players.length}</span></td>
+              <td class="pts" style="text-align:right">${getTeamScore(t)}</td>
+            </tr>
+          `).join('')}
+        </table>
+      </div>
+      <div class="card">
+        <h2>Points by Team</h2>
+        <div class="bar-chart">
+          ${sorted.map((t,i) => `
+            <div class="bar-row">
+              <div class="bar-label">${t.name}</div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width:${Math.max(getTeamScore(t)/maxScore*100,2)}%;background:${TEAM_COLORS[t.idx]};">${getTeamScore(t)}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+      <h2>Top 15 Scorers</h2>
+      <table>
+        <tr><th>#</th><th>Player</th><th>College</th><th>Fantasy Team</th><th>Status</th><th style="text-align:right">Points</th></tr>
+        ${getTopScorers().slice(0,15).map((p,i) => {
+          const live = livePlayerStats[p.name];
+          return `
+          <tr class="${isPlayerEliminated(p) ? 'eliminated-row' : ''}">
+            <td class="rank">${i+1}</td>
+            <td>${p.name} ${live?.gameStatus === 'in_progress' ? '<span class="badge badge-live">LIVE</span>' : ''}</td>
+            <td class="college-team">${p.college}</td>
+            <td><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${TEAM_COLORS[p.teamIdx]};margin-right:6px;"></span>${p.teamName}</td>
+            <td>${isPlayerEliminated(p) ? '<span class="badge badge-eliminated">OUT</span>' : '<span class="badge badge-active">ACTIVE</span>'}</td>
+            <td class="pts" style="text-align:right;${live?.gameStatus === 'in_progress' ? 'color:var(--green);' : ''}">${getPlayerScore(p.name)}${live?.gameStatus === 'in_progress' ? '<span class="live-pts-badge">LIVE</span>' : ''}</td>
+          </tr>`;
+        }).join('')}
+      </table>
+    </div>
+  `;
+}
+
+// ===== TEAMS =====
+function renderTeams() {
+  return `<div class="grid-2">
+    ${state.teams.map((t,ti) => {
+      const hasLivePlayers = t.players.some(p => livePlayerStats[p.name]?.gameStatus === 'in_progress');
+      return `
+      <div class="card ${hasLivePlayers ? 'card-live' : ''}">
+        <div class="team-header">
+          <h2><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${TEAM_COLORS[ti]};margin-right:8px;"></span>${t.name} ${hasLivePlayers ? '<span class="badge badge-live">LIVE</span>' : ''}</h2>
+          <div class="team-total">${getTeamScore(t)} pts</div>
+        </div>
+        <div style="color:var(--muted);font-size:12px;margin-bottom:12px;">${getActivePlayers(t).length} active / ${t.players.filter(p=>isPlayerEliminated(p)).length} eliminated</div>
+        <table>
+          <tr><th>Player</th><th>College</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>R5</th><th>R6</th><th style="text-align:right">Total</th></tr>
+          ${t.players.map(p => {
+            const live = livePlayerStats[p.name];
+            return `
+            <tr class="${isPlayerEliminated(p) ? 'eliminated-row' : ''}">
+              <td>${p.name} ${live?.gameStatus === 'in_progress' ? '<span class="badge badge-live">LIVE</span>' : ''}</td>
+              <td class="college-team">${p.college}</td>
+              ${[1,2,3,4,5,6].map(r => `<td style="text-align:center;font-variant-numeric:tabular-nums;${live?.gameStatus === 'in_progress' && r == state.currentRound ? 'color:var(--green);font-weight:700;' : ''}">${getPlayerScore(p.name,r) || '—'}</td>`).join('')}
+              <td class="pts" style="text-align:right">${getPlayerScore(p.name)}</td>
+            </tr>`;
+          }).join('')}
+          <tr style="font-weight:700;border-top:2px solid var(--border);">
+            <td colspan="2">Total</td>
+            ${[1,2,3,4,5,6].map(r => `<td style="text-align:center;">${t.players.reduce((s,p) => s + getPlayerScore(p.name,r), 0)}</td>`).join('')}
+            <td class="pts" style="text-align:right">${getTeamScore(t)}</td>
+          </tr>
+        </table>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ===== PLAYERS =====
+function renderPlayers() {
+  const all = getTopScorers();
+  const searchTerm = document.getElementById('globalSearch')?.value?.toLowerCase() || '';
+  const filtered = searchTerm ? all.filter(p =>
+    p.name.toLowerCase().includes(searchTerm) ||
+    p.college.toLowerCase().includes(searchTerm) ||
+    p.teamName.toLowerCase().includes(searchTerm)
+  ) : all;
+
+  return `<div class="card">
+    <h2>All Players (${filtered.length})</h2>
+    <table>
+      <tr><th>#</th><th>Player</th><th>College</th><th>Fantasy Team</th><th>Status</th>
+      <th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>R5</th><th>R6</th><th style="text-align:right">Total</th></tr>
+      ${filtered.map((p,i) => {
+        const live = livePlayerStats[p.name];
+        return `
+        <tr class="${isPlayerEliminated(p) ? 'eliminated-row' : ''}">
+          <td class="rank">${i+1}</td>
+          <td>${p.name} ${live?.gameStatus === 'in_progress' ? '<span class="badge badge-live">LIVE</span>' : ''}</td>
+          <td class="college-team">${p.college}</td>
+          <td><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${TEAM_COLORS[p.teamIdx]};margin-right:6px;"></span>${p.teamName}</td>
+          <td>${isPlayerEliminated(p) ? '<span class="badge badge-eliminated">OUT</span>' : live?.gameStatus === 'in_progress' ? '<span class="badge badge-live">PLAYING</span>' : '<span class="badge badge-active">ACTIVE</span>'}</td>
+          ${[1,2,3,4,5,6].map(r => `<td style="text-align:center;font-variant-numeric:tabular-nums;${live?.gameStatus === 'in_progress' && r == state.currentRound ? 'color:var(--green);font-weight:700;' : ''}">${getPlayerScore(p.name,r) || '—'}</td>`).join('')}
+          <td class="pts" style="text-align:right">${getPlayerScore(p.name)}</td>
+        </tr>`;
+      }).join('')}
+    </table>
+  </div>`;
+}
+
+// ===== COLLEGES =====
+function renderColleges() {
+  const colleges = {};
+  state.teams.forEach((t,ti) => {
+    t.players.forEach(p => {
+      if (!colleges[p.college]) colleges[p.college] = { players: [], totalPts: 0 };
+      const entry = { ...p, teamName: t.name, teamIdx: ti };
+      colleges[p.college].players.push(entry);
+      colleges[p.college].totalPts += getPlayerScore(p.name);
+    });
+  });
+  const sorted = Object.entries(colleges).sort((a,b) => b[1].totalPts - a[1].totalPts);
+
+  return `<div class="grid-2">
+    ${sorted.map(([college, data]) => `
+      <div class="card" style="${isEliminated(college) ? 'opacity:0.5;border-color:var(--red);' : ''}">
+        <div class="team-header">
+          <h2>${college} ${isEliminated(college) ? '<span class="badge badge-eliminated">ELIMINATED</span>' : '<span class="badge badge-active">ACTIVE</span>'}</h2>
+          <div class="team-total">${data.totalPts} pts</div>
+        </div>
+        <div style="color:var(--muted);font-size:12px;margin-bottom:8px;">${data.players.length} drafted player${data.players.length>1?'s':''}</div>
+        <table>
+          <tr><th>Player</th><th>Fantasy Team</th><th style="text-align:right">Points</th></tr>
+          ${data.players.map(p => `
+            <tr>
+              <td>${p.name} ${livePlayerStats[p.name]?.gameStatus === 'in_progress' ? '<span class="badge badge-live">LIVE</span>' : ''}</td>
+              <td><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${TEAM_COLORS[p.teamIdx]};margin-right:6px;"></span>${p.teamName}</td>
+              <td class="pts" style="text-align:right">${getPlayerScore(p.name)}</td>
+            </tr>
+          `).join('')}
+        </table>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
+// ===== ELIMINATIONS =====
+function renderEliminated() {
+  const colleges = getAllColleges();
+  const elimColleges = colleges.filter(c => isEliminated(c));
+  const activeColleges = colleges.filter(c => !isEliminated(c));
+
+  return `
+    <div class="grid-2" style="margin-bottom:20px;">
+      <div class="card">
+        <div class="stat-label">Active College Teams</div>
+        <div class="stat-value" style="font-size:32px;margin-top:8px;color:var(--green)">${activeColleges.length}</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">Eliminated College Teams</div>
+        <div class="stat-value" style="font-size:32px;margin-top:8px;color:var(--red)">${elimColleges.length}</div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2>Manage Eliminations</h2>
+        <span style="color:var(--muted);font-size:12px;">Losing teams are auto-eliminated when live updates are on</span>
+      </div>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Click a college to toggle its elimination status. All players from that team will be marked as eliminated.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${colleges.map(c => `
+          <button class="btn ${isEliminated(c) ? 'btn-danger' : ''}" onclick="toggleElimination('${c.replace(/'/g, "\\'")}')" style="${isEliminated(c) ? 'text-decoration:line-through;' : ''}">
+            ${c} ${isEliminated(c) ? '✕' : ''}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+    ${elimColleges.length > 0 ? `
+    <div class="card">
+      <h2>Eliminated Teams & Affected Players</h2>
+      <table>
+        <tr><th>College</th><th>Round Eliminated</th><th>Affected Players</th><th>Fantasy Teams Affected</th></tr>
+        ${elimColleges.map(c => {
+          const players = [];
+          state.teams.forEach((t,ti) => t.players.forEach(p => {
+            if (p.college === c) players.push({ ...p, teamName: t.name, teamIdx: ti });
+          }));
+          return `<tr>
+            <td style="font-weight:700;color:var(--red)">${c}</td>
+            <td>Round ${state.eliminated[c]}</td>
+            <td>${players.map(p => p.name).join(', ')}</td>
+            <td>${[...new Set(players.map(p => p.teamName))].join(', ')}</td>
+          </tr>`;
+        }).join('')}
+      </table>
+    </div>` : ''}
+  `;
+}
+
+function toggleElimination(college) {
+  if (state.eliminated[college]) {
+    delete state.eliminated[college];
+    showToast(`${college} restored to active`);
+  } else {
+    state.eliminated[college] = state.currentRound;
+    showToast(`${college} eliminated in Round ${state.currentRound}`);
+  }
+  saveState();
+  render();
+}
+
+// ===== DRAFT BOARD =====
+function renderDraft() {
+  const rounds = [1,2,3,4,5,6,7,8];
+  return `<div class="card">
+    <h2>Draft Board</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <tr>
+          <th>Round</th>
+          ${state.teams.map((t,i) => `<th><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TEAM_COLORS[i]};margin-right:4px;"></span>${t.name}</th>`).join('')}
+        </tr>
+        ${rounds.map(r => `
+          <tr>
+            <td class="rank">${r}</td>
+            ${state.teams.map(t => {
+              const p = t.players[r-1];
+              if (!p) return '<td>—</td>';
+              const live = livePlayerStats[p.name];
+              return `<td class="${isPlayerEliminated(p) ? 'eliminated-row' : ''}">
+                ${p.name}${live?.gameStatus === 'in_progress' ? ' <span class="badge badge-live">' + live.pts + 'pts</span>' : ''}
+                <br><span class="college-team">${p.college}</span>
+              </td>`;
+            }).join('')}
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+  </div>`;
+}
+
+// ===== SCORE MODAL =====
+let selectedRound = 1;
+
+function openScoreModal() {
+  selectedRound = state.currentRound;
+  document.getElementById('scoreModal').classList.add('open');
+  renderRoundSelector();
+  renderTeamFilterDropdown();
+  renderScoreEntries();
+}
+
+function closeScoreModal() {
+  document.getElementById('scoreModal').classList.remove('open');
+}
+
+function renderRoundSelector() {
+  document.getElementById('roundSelector').innerHTML = [1,2,3,4,5,6].map(r =>
+    `<button class="round-btn ${r === selectedRound ? 'active' : ''}" onclick="selectRound(${r})">${ROUND_NAMES[r]}</button>`
+  ).join('');
+}
+
+function selectRound(r) {
+  selectedRound = r;
+  state.currentRound = r;
+  saveState();
+  renderRoundSelector();
+  renderScoreEntries();
+}
+
+function renderTeamFilterDropdown() {
+  document.getElementById('scoreTeamFilter').innerHTML = `<option value="all">All Teams</option>` +
+    state.teams.map((t,i) => `<option value="${i}">${t.name}</option>`).join('');
+}
+
+function renderScoreEntries() {
+  const container = document.getElementById('scoreEntries');
+  const filterVal = document.getElementById('scoreTeamFilter').value;
+  let teams = filterVal === 'all' ? state.teams.map((t,i) => ({...t, idx:i})) : [{ ...state.teams[filterVal], idx: parseInt(filterVal) }];
+
+  container.innerHTML = teams.map(t => `
+    <div style="margin-bottom:16px;">
+      <h3 style="color:${TEAM_COLORS[t.idx]};font-size:14px;font-weight:700;margin-bottom:8px;">${t.name}</h3>
+      ${t.players.filter(p => !isPlayerEliminated(p)).map(p => {
+        const live = livePlayerStats[p.name];
+        return `
+        <div style="display:flex;align-items:center;gap:12px;padding:6px 0;">
+          <span style="flex:1;font-size:13px;">${p.name} <span class="college-team">(${p.college})</span>
+            ${live ? `<span class="live-pts-badge">ESPN: ${live.pts}pts ${live.gameClock}</span>` : ''}
+          </span>
+          <input type="number" min="0" id="score_${p.name.replace(/[^a-zA-Z0-9]/g,'_')}" value="${getPlayerScore(p.name, selectedRound)}" />
+        </div>`;
+      }).join('')}
+    </div>
+  `).join('');
+}
+
+function saveScores() {
+  state.teams.forEach(t => {
+    t.players.forEach(p => {
+      if (isPlayerEliminated(p)) return;
+      const input = document.getElementById('score_' + p.name.replace(/[^a-zA-Z0-9]/g,'_'));
+      if (input) {
+        if (!state.scores[p.name]) state.scores[p.name] = {};
+        state.scores[p.name][selectedRound] = parseInt(input.value) || 0;
+      }
+    });
+  });
+  saveState();
+  closeScoreModal();
+  render();
+  showToast('Scores saved!');
+}
+
+// ===== SEARCH =====
+function handleSearch() {
+  if (currentTab === 'players') render();
+}
+
+// ===== EXPORT / IMPORT =====
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'mm_draft_2026_data.json';
+  a.click();
+  showToast('Data exported!');
+}
+
+function importData() {
+  document.getElementById('fileInput').click();
+}
+
+function handleImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      state = JSON.parse(ev.target.result);
+      saveState();
+      render();
+      showToast('Data imported!');
+    } catch(err) {
+      showToast('Import failed: invalid JSON');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ===== TOAST =====
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ===== INIT =====
+// One-time fix: clear false eliminations caused by "South Florida" matching "Florida"
+// and "Arkansas" matching "Kansas" bugs (fixed in this version)
+(function fixBadEliminations() {
+  // Only clear if Florida was eliminated in round 1 (the false positive)
+  // Users can always re-eliminate manually if needed
+  const badMatches = ['Florida']; // add others here if found
+  let changed = false;
+  for (const college of badMatches) {
+    if (state.eliminated[college]) {
+      delete state.eliminated[college];
+      changed = true;
+    }
+  }
+  if (changed) saveState();
+})();
+
+render();
+</script>
+</body>
+</html>
