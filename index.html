@@ -640,20 +640,40 @@ function detectRound(event, competition) {
   // Try notes first (e.g. "First Round - East Region")
   const notes = competition?.notes || event?.competitions?.[0]?.notes || [];
   for (const note of notes) {
-    const h = (note.headline || '').toLowerCase();
+    const h = (note.headline || note.text || '').toLowerCase();
     if (h.includes('first four')) return 1;
-    if (h.includes('first round')) return 1;
-    if (h.includes('second round')) return 2;
-    if (h.includes('sweet 16') || h.includes('regional semifinal')) return 3;
+    if (h.includes('1st round') || h.includes('first round') || h.includes('round of 64')) return 1;
+    if (h.includes('2nd round') || h.includes('second round') || h.includes('round of 32')) return 2;
+    if (h.includes('sweet 16') || h.includes('sweet sixteen') || h.includes('regional semifinal')) return 3;
     if (h.includes('elite eight') || h.includes('elite 8') || h.includes('regional final')) return 4;
     if (h.includes('final four') || h.includes('national semifinal')) return 5;
-    if (h.includes('championship') || h.includes('national final')) return 6;
+    if (h.includes('national championship') || h.includes('championship game') || h.includes('national final')) return 6;
   }
-  // Fallback to date mapping
-  const dateStr = event?.date?.slice(0, 10) || '';
-  if (DATE_TO_ROUND[dateStr]) return DATE_TO_ROUND[dateStr];
-  // Last resort: use state.currentRound
-  return state.currentRound;
+
+  // Fallback: parse the game date and match to tournament schedule
+  // Try event.date first, then competition date
+  const rawDate = event?.date || competition?.date || '';
+  if (rawDate) {
+    // ESPN dates are UTC like "2026-03-19T23:00Z" — convert to Eastern for game date
+    const d = new Date(rawDate);
+    // Offset to US Eastern (UTC-4 during March DST)
+    d.setHours(d.getHours() - 4);
+    const dateKey = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    if (DATE_TO_ROUND[dateKey]) return DATE_TO_ROUND[dateKey];
+
+    // Also try the raw ISO date (first 10 chars)
+    const isoDate = rawDate.slice(0, 10);
+    if (DATE_TO_ROUND[isoDate]) return DATE_TO_ROUND[isoDate];
+  }
+
+  // Last resort: determine from today's date
+  const today = new Date();
+  today.setHours(today.getHours() - 4);
+  const todayKey = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  if (DATE_TO_ROUND[todayKey]) return DATE_TO_ROUND[todayKey];
+
+  // Absolute fallback: round 1
+  return 1;
 }
 
 function getDefaultState() {
@@ -1639,14 +1659,15 @@ function showToast(msg) {
 if (!state.processedGames) { state.processedGames = {}; saveState(); }
 if (!state.lastFullScan) { state.lastFullScan = null; }
 
-// One-time v2 migration: clear false eliminations from old includes() matching bug
-if (!state._v2migrated) {
-  // Clear any eliminations that came from bad matching (South Florida→Florida, Arkansas→Kansas)
-  // Users can re-eliminate manually or let the live feed re-detect from final games
+// v3 migration: clear all stale data from old bugs (wrong round writes, bad matching)
+// The live feed will re-fetch and re-lock everything correctly
+if (!state._v3migrated) {
+  state.scores = {};
   state.eliminated = {};
   state.processedGames = {};
   state.lastFullScan = null;
-  state._v2migrated = true;
+  state.currentRound = 1;
+  state._v3migrated = true;
   saveState();
 }
 
