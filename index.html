@@ -528,11 +528,47 @@ let livePlayerStats = {}; // { playerName: { pts: N, gameStatus: "in_progress"|"
 let lastFetchTime = null;
 let fetchLog = [];
 
+// 2026 NCAA Tournament date→round mapping
+const TOURNAMENT_START = '2026-03-18'; // First Four
+const TOURNAMENT_END = '2026-04-07';   // Championship
+const DATE_TO_ROUND = {
+  '2026-03-18': 1, '2026-03-19': 1, // First Four (count as R64)
+  '2026-03-20': 1, '2026-03-21': 1, // Round of 64
+  '2026-03-22': 2, '2026-03-23': 2, // Round of 32
+  '2026-03-27': 3, '2026-03-28': 3, // Sweet 16
+  '2026-03-29': 4, '2026-03-30': 4, // Elite 8
+  '2026-04-05': 5,                   // Final Four
+  '2026-04-07': 6,                   // Championship
+};
+
+// Detect round from ESPN event data
+function detectRound(event, competition) {
+  // Try notes first (e.g. "First Round - East Region")
+  const notes = competition?.notes || event?.competitions?.[0]?.notes || [];
+  for (const note of notes) {
+    const h = (note.headline || '').toLowerCase();
+    if (h.includes('first four')) return 1;
+    if (h.includes('first round')) return 1;
+    if (h.includes('second round')) return 2;
+    if (h.includes('sweet 16') || h.includes('regional semifinal')) return 3;
+    if (h.includes('elite eight') || h.includes('elite 8') || h.includes('regional final')) return 4;
+    if (h.includes('final four') || h.includes('national semifinal')) return 5;
+    if (h.includes('championship') || h.includes('national final')) return 6;
+  }
+  // Fallback to date mapping
+  const dateStr = event?.date?.slice(0, 10) || '';
+  if (DATE_TO_ROUND[dateStr]) return DATE_TO_ROUND[dateStr];
+  // Last resort: use state.currentRound
+  return state.currentRound;
+}
+
 function getDefaultState() {
   const s = JSON.parse(JSON.stringify(initialData));
   s.scores = {};
   s.eliminated = {};
   s.currentRound = 1;
+  s.processedGames = {};   // { gameId: { round, scores: {playerName: pts}, eliminated: [colleges] } }
+  s.lastFullScan = null;   // ISO timestamp of last full tournament scan
   return s;
 }
 
@@ -683,42 +719,49 @@ function getDraftedPlayersFromCollege(college) {
   return players;
 }
 
-// Fetch tournament scoreboard — scans today + recent days to catch First Four, etc.
-async function fetchScoreboard() {
-  try {
-    const allEvents = [];
-    const seenIds = new Set();
-    const today = new Date();
-
-    // Scan today and the past 3 days to catch First Four and multi-day rounds
-    for (let daysBack = 0; daysBack <= 3; daysBack++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - daysBack);
-      const dateStr = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
-
+// Fetch tournament scoreboard for a date range
+async function fetchScoreboardForDates(dates) {
+  const allEvents = [];
+  const seenIds = new Set();
+  for (const dateStr of dates) {
+    try {
       const url = `${ESPN_SCOREBOARD}?dates=${dateStr}&groups=100&limit=100`;
-      if (daysBack === 0) addLog(`Fetching scoreboard: ${dateStr} (+ ${3} prior days)`);
-
-      try {
-        const resp = await fetch(url);
-        if (!resp.ok) continue;
-        const data = await resp.json();
-        const events = data.events || [];
-        for (const ev of events) {
-          if (!seenIds.has(ev.id)) {
-            seenIds.add(ev.id);
-            allEvents.push(ev);
-          }
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      for (const ev of (data.events || [])) {
+        if (!seenIds.has(ev.id)) {
+          seenIds.add(ev.id);
+          allEvents.push(ev);
         }
-      } catch(e) { /* skip failed day */ }
-    }
-
-    addLog(`Found ${allEvents.length} tournament games across all days`);
-    return allEvents;
-  } catch (err) {
-    addLog(`Scoreboard error: ${err.message}`);
-    return [];
+      }
+    } catch(e) { /* skip failed day */ }
   }
+  return allEvents;
+}
+
+// Get date strings from tournament start through today
+function getTournamentDates() {
+  const start = new Date(TOURNAMENT_START + 'T00:00:00');
+  const today = new Date();
+  today.setHours(23,59,59); // include all of today
+  const dates = [];
+  for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+    dates.push(d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0'));
+  }
+  return dates;
+}
+
+// Get just today + yesterday
+function getRecentDates() {
+  const dates = [];
+  const today = new Date();
+  for (let i = 0; i <= 1; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    dates.push(d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0'));
+  }
+  return dates;
 }
 
 // Fetch boxscore for a specific game
@@ -734,6 +777,81 @@ async function fetchBoxscore(gameId) {
   }
 }
 
+// Extract player stats from a boxscore for a given game
+function extractPlayerStats(game, data) {
+  const results = []; // { draftName, pts, college }
+  if (!data?.boxscore) return results;
+
+  const espnPlayers = data.boxscore.players || [];
+  for (const teamPlayers of espnPlayers) {
+    const matchedCollege = matchESPNTeam({ team: teamPlayers.team });
+    if (!matchedCollege || !game.relevantColleges.includes(matchedCollege)) continue;
+
+    const draftedPlayers = getDraftedPlayersFromCollege(matchedCollege);
+    const statistics = teamPlayers.statistics || [];
+
+    for (const statGroup of statistics) {
+      const rawLabels = statGroup.labels || statGroup.names || [];
+      const labels = rawLabels.map(l => l.toLowerCase());
+      const ptsIdx = labels.indexOf('pts');
+      if (ptsIdx === -1) continue;
+
+      const athletes = statGroup.athletes || [];
+      for (const athlete of athletes) {
+        const espnPlayerName = athlete.athlete?.displayName || athlete.athlete?.shortName || '';
+        for (const draftPlayer of draftedPlayers) {
+          if (namesMatch(draftPlayer.name, espnPlayerName)) {
+            const stats = athlete.stats || [];
+            const pts = parseInt(stats[ptsIdx]) || 0;
+            results.push({ draftName: draftPlayer.name, pts, college: matchedCollege });
+            break;
+          }
+        }
+      }
+    }
+  }
+  return results;
+}
+
+// Build game info from ESPN event data
+function buildGameInfo(event) {
+  const draftedColleges = getDraftedColleges();
+  const comp = (event.competitions || [])[0];
+  if (!comp) return null;
+
+  const gameInfo = {
+    id: event.id,
+    name: event.name || '',
+    shortName: event.shortName || '',
+    status: comp.status?.type?.name || 'unknown',
+    statusDetail: comp.status?.type?.detail || '',
+    clock: comp.status?.displayClock || '',
+    period: comp.status?.period || 0,
+    round: detectRound(event, comp),
+    date: event.date || '',
+    teams: [],
+    relevantColleges: []
+  };
+
+  let isRelevant = false;
+  for (const competitor of (comp.competitors || [])) {
+    const collegeName = matchESPNTeam(competitor);
+    gameInfo.teams.push({
+      espnName: competitor.team?.displayName || competitor.team?.location || 'Unknown',
+      abbreviation: competitor.team?.abbreviation || '',
+      score: parseInt(competitor.score) || 0,
+      homeAway: competitor.homeAway || '',
+      winner: competitor.winner || false,
+      draftCollege: collegeName,
+    });
+    if (collegeName && draftedColleges.has(collegeName)) {
+      isRelevant = true;
+      gameInfo.relevantColleges.push(collegeName);
+    }
+  }
+  return isRelevant ? gameInfo : null;
+}
+
 // Main live update cycle
 async function doLiveUpdate() {
   if (!liveEnabled) return;
@@ -741,154 +859,111 @@ async function doLiveUpdate() {
   addLog('Starting live update...');
   lastFetchTime = new Date();
 
-  // Step 1: Get scoreboard
-  const events = await fetchScoreboard();
+  // Initialize processedGames if missing (backward compat)
+  if (!state.processedGames) state.processedGames = {};
+
+  // Decide scan range: full tournament scan on first load or every 30 min, otherwise just recent
+  const now = Date.now();
+  const needsFullScan = !state.lastFullScan || (now - new Date(state.lastFullScan).getTime()) > 30 * 60 * 1000;
+  const datesToScan = needsFullScan ? getTournamentDates() : getRecentDates();
+  addLog(needsFullScan ? `Full tournament scan (${datesToScan.length} days)` : `Quick scan (today + yesterday)`);
+
+  const events = await fetchScoreboardForDates(datesToScan);
+  if (needsFullScan) {
+    state.lastFullScan = new Date().toISOString();
+  }
+
+  // Build game info for all relevant games
   liveGames = [];
   livePlayerStats = {};
 
-  const draftedColleges = getDraftedColleges();
-
-  // Step 2: Find games involving our colleges
-  const relevantGameIds = [];
-
   for (const event of events) {
-    const competitions = event.competitions || [];
-    for (const comp of competitions) {
-      const competitors = comp.competitors || [];
-      let isRelevant = false;
-      let gameInfo = {
-        id: event.id,
-        name: event.name || '',
-        shortName: event.shortName || '',
-        status: comp.status?.type?.name || 'unknown', // "STATUS_IN_PROGRESS", "STATUS_FINAL", "STATUS_SCHEDULED"
-        statusDetail: comp.status?.type?.detail || '',
-        clock: comp.status?.displayClock || '',
-        period: comp.status?.period || 0,
-        teams: [],
-        relevantColleges: []
-      };
-
-      for (const competitor of competitors) {
-        const collegeName = matchESPNTeam(competitor);
-        const teamData = {
-          espnName: competitor.team?.displayName || competitor.team?.location || 'Unknown',
-          abbreviation: competitor.team?.abbreviation || '',
-          score: parseInt(competitor.score) || 0,
-          homeAway: competitor.homeAway || '',
-          winner: competitor.winner || false,
-          logo: competitor.team?.logo || '',
-          draftCollege: collegeName,
-          seed: competitor.curatedRank?.current || competitor.statistics?.[0]?.displayValue || ''
-        };
-        gameInfo.teams.push(teamData);
-
-        if (collegeName && draftedColleges.has(collegeName)) {
-          isRelevant = true;
-          gameInfo.relevantColleges.push(collegeName);
-        }
-      }
-
-      if (isRelevant) {
-        liveGames.push(gameInfo);
-        relevantGameIds.push(event.id);
-      }
-    }
+    const gameInfo = buildGameInfo(event);
+    if (gameInfo) liveGames.push(gameInfo);
   }
 
   addLog(`${liveGames.length} games involve drafted players`);
 
-  // Step 3: Fetch boxscores for relevant games (in progress or final)
-  const boxscorePromises = [];
-  for (const game of liveGames) {
-    if (game.status === 'STATUS_IN_PROGRESS' || game.status === 'STATUS_FINAL' ||
-        game.status === 'STATUS_HALFTIME' || game.status === 'STATUS_END_PERIOD') {
-      boxscorePromises.push(fetchBoxscore(game.id).then(data => ({ game, data })));
+  // Restore locked scores from processed games into livePlayerStats for display
+  for (const [gameId, processed] of Object.entries(state.processedGames)) {
+    for (const [playerName, pts] of Object.entries(processed.scores || {})) {
+      livePlayerStats[playerName] = {
+        pts,
+        gameStatus: 'final',
+        gameClock: 'Final',
+        round: processed.round,
+        locked: true
+      };
     }
   }
 
-  const boxscores = await Promise.all(boxscorePromises);
+  // Fetch boxscores only for games that need it
+  const gamesToFetch = liveGames.filter(g => {
+    // Already processed and locked — skip
+    if (state.processedGames[g.id]) return false;
+    // Only fetch if in progress or final
+    return ['STATUS_IN_PROGRESS', 'STATUS_FINAL', 'STATUS_HALFTIME', 'STATUS_END_PERIOD'].includes(g.status);
+  });
 
-  // Step 4: Extract player stats
+  addLog(`Fetching ${gamesToFetch.length} boxscores (${Object.keys(state.processedGames).length} already locked)`);
+
+  const boxscores = await Promise.all(
+    gamesToFetch.map(game => fetchBoxscore(game.id).then(data => ({ game, data })))
+  );
+
   let matchedPlayers = 0;
   for (const { game, data } of boxscores) {
     if (!data) continue;
 
-    // Navigate boxscore structure
-    const boxscore = data.boxscore;
-    if (!boxscore) continue;
+    const playerResults = extractPlayerStats(game, data);
+    const round = game.round;
 
-    const espnPlayers = boxscore.players || [];
-    for (const teamPlayers of espnPlayers) {
-      // Match boxscore team to our college using the same exact-match logic
-      const matchedCollege = matchESPNTeam({ team: teamPlayers.team });
-      if (!matchedCollege || !game.relevantColleges.includes(matchedCollege)) continue;
+    for (const { draftName, pts, college } of playerResults) {
+      addLog(`MATCHED: "${draftName}" → ${pts} pts (Round ${round}, game ${game.id})`);
+      matchedPlayers++;
 
-      const draftedPlayers = getDraftedPlayersFromCollege(matchedCollege);
-      const statistics = teamPlayers.statistics || [];
+      // Write score to the correct round
+      if (!state.scores[draftName]) state.scores[draftName] = {};
+      state.scores[draftName][round] = pts;
 
-      addLog(`Processing ${matchedCollege}: ${draftedPlayers.map(p=>p.name).join(', ')}`);
-
-      for (const statGroup of statistics) {
-        // Find "points" index in stat labels — ESPN uses "labels" or "names"
-        const rawLabels = statGroup.labels || statGroup.names || [];
-        const labels = rawLabels.map(l => l.toLowerCase());
-        const ptsIdx = labels.indexOf('pts');
-        addLog(`Stat labels: [${rawLabels.slice(0,5).join(',')}...] ptsIdx=${ptsIdx}`);
-        if (ptsIdx === -1) continue;
-
-        const athletes = statGroup.athletes || [];
-        addLog(`Found ${athletes.length} athletes in boxscore for ${matchedCollege}`);
-        for (const athlete of athletes) {
-          const espnPlayerName = athlete.athlete?.displayName || athlete.athlete?.shortName || '';
-
-          for (const draftPlayer of draftedPlayers) {
-            if (namesMatch(draftPlayer.name, espnPlayerName)) {
-              const stats = athlete.stats || [];
-              const pts = parseInt(stats[ptsIdx]) || 0;
-              addLog(`MATCHED: "${draftPlayer.name}" ↔ "${espnPlayerName}" → ${pts} pts`);
-
-              let gameStatus = 'in_progress';
-              if (game.status === 'STATUS_FINAL') gameStatus = 'final';
-
-              livePlayerStats[draftPlayer.name] = {
-                pts,
-                gameStatus,
-                gameClock: game.status === 'STATUS_FINAL' ? 'Final' :
-                           game.status === 'STATUS_HALFTIME' ? 'Halftime' :
-                           `${game.clock} - ${game.period === 1 ? '1st' : game.period === 2 ? '2nd' : 'OT'}`,
-                opponent: game.teams.find(t => t.draftCollege !== matchedCollege)?.espnName || '?',
-                gameScore: game.teams.map(t => `${t.abbreviation} ${t.score}`).join(' - ')
-              };
-
-              matchedPlayers++;
-              break;
-            }
-          }
-        }
-      }
+      // Update live display
+      livePlayerStats[draftName] = {
+        pts,
+        gameStatus: game.status === 'STATUS_FINAL' ? 'final' : 'in_progress',
+        gameClock: game.status === 'STATUS_FINAL' ? 'Final' :
+                   game.status === 'STATUS_HALFTIME' ? 'Halftime' :
+                   `${game.clock} - ${game.period === 1 ? '1st' : game.period === 2 ? '2nd' : 'OT'}`,
+        opponent: game.teams.find(t => t.draftCollege !== college)?.espnName || '?',
+        gameScore: game.teams.map(t => `${t.abbreviation} ${t.score}`).join(' - '),
+        round
+      };
     }
 
-    // Step 5: Check for eliminations (final games where a college lost)
+    // Handle eliminations and lock final games
     if (game.status === 'STATUS_FINAL') {
+      // Lock this game — won't re-fetch next time
+      const lockedScores = {};
+      for (const { draftName, pts } of playerResults) {
+        lockedScores[draftName] = pts;
+      }
+      const eliminatedColleges = [];
       for (const team of game.teams) {
         if (team.draftCollege && !team.winner && !state.eliminated[team.draftCollege]) {
-          // Auto-eliminate losing teams
-          state.eliminated[team.draftCollege] = state.currentRound;
-          addLog(`AUTO-ELIMINATED: ${team.draftCollege} (lost to ${game.teams.find(t => t !== team)?.espnName})`);
+          state.eliminated[team.draftCollege] = round;
+          eliminatedColleges.push(team.draftCollege);
+          addLog(`AUTO-ELIMINATED: ${team.draftCollege} (Round ${round})`);
         }
       }
+      state.processedGames[game.id] = {
+        round,
+        scores: lockedScores,
+        eliminated: eliminatedColleges,
+        date: game.date
+      };
     }
   }
 
-  // Step 6: Auto-apply live scores to current round
-  for (const [playerName, stats] of Object.entries(livePlayerStats)) {
-    if (stats.gameStatus === 'final' || stats.gameStatus === 'in_progress') {
-      if (!state.scores[playerName]) state.scores[playerName] = {};
-      state.scores[playerName][state.currentRound] = stats.pts;
-    }
-  }
-
-  addLog(`Matched ${matchedPlayers} drafted players with stats`);
+  addLog(`Matched ${matchedPlayers} players | ${Object.keys(state.processedGames).length} games locked`);
   saveState();
   render();
   updateLiveIndicator();
@@ -1466,21 +1541,20 @@ function showToast(msg) {
 }
 
 // ===== INIT =====
-// One-time fix: clear false eliminations caused by "South Florida" matching "Florida"
-// and "Arkansas" matching "Kansas" bugs (fixed in this version)
-(function fixBadEliminations() {
-  // Only clear if Florida was eliminated in round 1 (the false positive)
-  // Users can always re-eliminate manually if needed
-  const badMatches = ['Florida']; // add others here if found
-  let changed = false;
-  for (const college of badMatches) {
-    if (state.eliminated[college]) {
-      delete state.eliminated[college];
-      changed = true;
-    }
-  }
-  if (changed) saveState();
-})();
+// Ensure state has processedGames (backward compat with older localStorage)
+if (!state.processedGames) { state.processedGames = {}; saveState(); }
+if (!state.lastFullScan) { state.lastFullScan = null; }
+
+// One-time v2 migration: clear false eliminations from old includes() matching bug
+if (!state._v2migrated) {
+  // Clear any eliminations that came from bad matching (South Florida→Florida, Arkansas→Kansas)
+  // Users can re-eliminate manually or let the live feed re-detect from final games
+  state.eliminated = {};
+  state.processedGames = {};
+  state.lastFullScan = null;
+  state._v2migrated = true;
+  saveState();
+}
 
 render();
 </script>
