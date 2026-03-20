@@ -697,12 +697,23 @@ function migrateState(s) {
   for (const team of s.teams) {
     for (const player of team.players) {
       if (NAME_CORRECTIONS[player.name]) {
-        // Also migrate scores
-        if (s.scores && s.scores[player.name]) {
-          s.scores[NAME_CORRECTIONS[player.name]] = s.scores[player.name];
-          delete s.scores[player.name];
+        const oldName = player.name;
+        const newName = NAME_CORRECTIONS[oldName];
+        // Migrate scores
+        if (s.scores && s.scores[oldName]) {
+          s.scores[newName] = s.scores[oldName];
+          delete s.scores[oldName];
         }
-        player.name = NAME_CORRECTIONS[player.name];
+        // Migrate processedGames locked scores
+        if (s.processedGames) {
+          for (const pg of Object.values(s.processedGames)) {
+            if (pg.scores && pg.scores[oldName] !== undefined) {
+              pg.scores[newName] = pg.scores[oldName];
+              delete pg.scores[oldName];
+            }
+          }
+        }
+        player.name = newName;
       }
     }
   }

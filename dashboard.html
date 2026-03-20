@@ -339,7 +339,7 @@ const NAME_ALIASES = {
   "Maleek Thomas": "Meleek Thomas",
   "Henri Veesar": "Henri Veesaar",
   "Brayden Burries": "Brayden Burries",
-  "Jojo Tugler": "Jojo Tugler",
+  "Joseph Tugler": "Joseph Tugler",
 };
 
 // Map ESPN team location (exact) → our draft college name
@@ -408,7 +408,7 @@ const initialData = {
         { name: "Jeremy Fears Jr", college: "MSU" },
         { name: "Solo Ball", college: "UConn" },
         { name: "Tobe Awaka", college: "Arizona" },
-        { name: "Jojo Tugler", college: "Houston" },
+        { name: "Joseph Tugler", college: "Houston" },
         { name: "Otega Oweh", college: "Kentucky" }
       ]
     },
@@ -536,12 +536,46 @@ function getDefaultState() {
   return s;
 }
 
+// Name corrections: old wrong name → correct name
+const NAME_CORRECTIONS = {
+  "Moe Krivas": "Motiejus Krivas",
+  "Jojo Tugler": "Joseph Tugler",
+};
+
+function migrateState(s) {
+  if (!s.teams) return s;
+  for (const team of s.teams) {
+    for (const player of team.players) {
+      if (NAME_CORRECTIONS[player.name]) {
+        const oldName = player.name;
+        const newName = NAME_CORRECTIONS[oldName];
+        // Migrate scores
+        if (s.scores && s.scores[oldName]) {
+          s.scores[newName] = s.scores[oldName];
+          delete s.scores[oldName];
+        }
+        // Migrate processedGames locked scores
+        if (s.processedGames) {
+          for (const pg of Object.values(s.processedGames)) {
+            if (pg.scores && pg.scores[oldName] !== undefined) {
+              pg.scores[newName] = pg.scores[oldName];
+              delete pg.scores[oldName];
+            }
+          }
+        }
+        player.name = newName;
+      }
+    }
+  }
+  return s;
+}
+
 function loadState() {
   try {
     const saved = localStorage.getItem('mm_draft_2026');
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed.teams) return parsed;
+      if (parsed.teams) return migrateState(parsed);
     }
   } catch(e) {}
   return getDefaultState();
