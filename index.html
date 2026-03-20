@@ -1149,8 +1149,9 @@ function renderLive() {
   const final = liveGames.filter(g => g.status === 'STATUS_FINAL');
   const upcoming = liveGames.filter(g => g.status === 'STATUS_SCHEDULED' || g.status === 'STATUS_POSTPONED');
 
-  // Live player stats sorted by points
+  // Live player stats — only players in active (non-final) games
   const livePlayersArr = Object.entries(livePlayerStats)
+    .filter(([name, stats]) => stats.gameStatus === 'in_progress')
     .map(([name, stats]) => {
       const info = getTopScorers().find(p => p.name === name) || {};
       return { name, ...stats, ...info };
