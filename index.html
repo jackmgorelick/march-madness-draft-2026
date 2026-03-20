@@ -686,12 +686,34 @@ function getDefaultState() {
   return s;
 }
 
+// Name corrections: old wrong name → correct name
+const NAME_CORRECTIONS = {
+  "Moe Krivas": "Motiejus Krivas",
+};
+
+function migrateState(s) {
+  if (!s.teams) return s;
+  for (const team of s.teams) {
+    for (const player of team.players) {
+      if (NAME_CORRECTIONS[player.name]) {
+        // Also migrate scores
+        if (s.scores && s.scores[player.name]) {
+          s.scores[NAME_CORRECTIONS[player.name]] = s.scores[player.name];
+          delete s.scores[player.name];
+        }
+        player.name = NAME_CORRECTIONS[player.name];
+      }
+    }
+  }
+  return s;
+}
+
 function loadState() {
   try {
     const saved = localStorage.getItem('mm_draft_2026');
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed.teams) return parsed;
+      if (parsed.teams) return migrateState(parsed);
     }
   } catch(e) {}
   return getDefaultState();
