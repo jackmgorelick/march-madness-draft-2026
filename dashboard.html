@@ -2,11 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0f1117">
-<title>March Madness Draft 2026</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>March Madness Draft 2026 Dashboard</title>
 <style>
   :root {
     --bg: #0f1117;
@@ -267,104 +264,11 @@
     font-size: 13px;
   }
   .log-time { color: var(--muted); font-size: 11px; margin-right: 8px; }
-  /* ===== MOBILE (iPhone) ===== */
-  @media (max-width: 768px) {
-    body { -webkit-text-size-adjust: 100%; }
-
-    header {
-      padding: 16px;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 12px;
-      padding-top: max(16px, env(safe-area-inset-top));
-    }
-    header h1 { font-size: 22px; }
-    .header-actions {
-      width: 100%;
-      justify-content: space-between;
-    }
-    .search-input {
-      width: 100%;
-      flex: 1;
-      font-size: 16px; /* prevents iOS zoom on focus */
-      padding: 10px 14px;
-    }
-
-    .tab-bar {
-      padding: 6px 12px;
-      gap: 2px;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-    }
-    .tab-bar::-webkit-scrollbar { display: none; }
-    .tab {
-      padding: 8px 14px;
-      font-size: 13px;
-      border-radius: 6px;
-      flex-shrink: 0;
-    }
-
-    .container {
-      padding: 12px;
-      padding-bottom: max(12px, env(safe-area-inset-bottom));
-    }
-    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; gap: 12px; }
-
-    .card { padding: 14px; border-radius: 10px; }
-    .card h2 { font-size: 16px; margin-bottom: 12px; }
-
-    .stat-value { font-size: 16px; }
-    .team-total { font-size: 20px; }
-    .team-header { flex-wrap: wrap; gap: 4px; }
-
-    /* Horizontally scrollable tables on mobile */
-    .card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    table { font-size: 12px; min-width: 400px; }
-    th { padding: 6px 8px; font-size: 10px; }
-    td { padding: 6px 8px; }
-    .rank { width: 24px; }
-
-    /* Compact standings table — no min-width needed */
-    .standings-table { min-width: unset !important; }
-
-    .badge { font-size: 10px; padding: 2px 6px; }
-    .college-team { font-size: 11px; }
-
-    .btn {
-      padding: 8px 12px;
-      font-size: 12px;
-    }
-    .btn-sm { padding: 6px 10px; }
-
-    .live-indicator {
-      padding: 6px 10px;
-      font-size: 12px;
-    }
-
-    .game-card { padding: 12px; }
-    .game-team-name { font-size: 14px; }
-    .game-team-score { font-size: 18px; }
-
-    .toast {
-      left: 12px;
-      right: 12px;
-      bottom: max(12px, env(safe-area-inset-bottom));
-      text-align: center;
-    }
-
-    .log-entry { font-size: 11px; padding: 6px 8px; }
-    .last-updated { font-size: 10px; }
-    .live-pts-badge { font-size: 10px; }
-  }
-
-  /* Extra small phones (iPhone SE, etc.) */
-  @media (max-width: 375px) {
-    header h1 { font-size: 19px; }
-    .tab { padding: 7px 10px; font-size: 12px; }
-    .container { padding: 8px; }
-    .card { padding: 10px; }
-    table { font-size: 11px; }
-    th, td { padding: 5px 6px; }
+  @media (max-width: 900px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .container { padding: 16px; }
+    header { padding: 16px; }
+    .tab-bar { padding: 8px 16px; }
   }
 </style>
 </head>
@@ -378,7 +282,9 @@
       <span id="liveLabel">LIVE OFF</span>
     </div>
     <input type="text" class="search-input" id="globalSearch" placeholder="Search players or teams..." oninput="handleSearch()">
+    <button class="btn btn-primary" onclick="openScoreModal()">Update Scores</button>
     <button class="btn" onclick="exportData()">Export</button>
+    <button class="btn" onclick="importData()">Import</button>
   </div>
 </header>
 
@@ -622,67 +528,11 @@ let livePlayerStats = {}; // { playerName: { pts: N, gameStatus: "in_progress"|"
 let lastFetchTime = null;
 let fetchLog = [];
 
-// 2026 NCAA Tournament date→round mapping
-const TOURNAMENT_START = '2026-03-18'; // First Four
-const TOURNAMENT_END = '2026-04-07';   // Championship
-const DATE_TO_ROUND = {
-  '2026-03-18': 1, '2026-03-19': 1, // First Four (count as R64)
-  '2026-03-20': 1, '2026-03-21': 1, // Round of 64
-  '2026-03-22': 2, '2026-03-23': 2, // Round of 32
-  '2026-03-27': 3, '2026-03-28': 3, // Sweet 16
-  '2026-03-29': 4, '2026-03-30': 4, // Elite 8
-  '2026-04-05': 5,                   // Final Four
-  '2026-04-07': 6,                   // Championship
-};
-
-// Detect round from ESPN event data
-function detectRound(event, competition) {
-  // Try notes first (e.g. "First Round - East Region")
-  const notes = competition?.notes || event?.competitions?.[0]?.notes || [];
-  for (const note of notes) {
-    const h = (note.headline || note.text || '').toLowerCase();
-    if (h.includes('first four')) return 1;
-    if (h.includes('1st round') || h.includes('first round') || h.includes('round of 64')) return 1;
-    if (h.includes('2nd round') || h.includes('second round') || h.includes('round of 32')) return 2;
-    if (h.includes('sweet 16') || h.includes('sweet sixteen') || h.includes('regional semifinal')) return 3;
-    if (h.includes('elite eight') || h.includes('elite 8') || h.includes('regional final')) return 4;
-    if (h.includes('final four') || h.includes('national semifinal')) return 5;
-    if (h.includes('national championship') || h.includes('championship game') || h.includes('national final')) return 6;
-  }
-
-  // Fallback: parse the game date and match to tournament schedule
-  // Try event.date first, then competition date
-  const rawDate = event?.date || competition?.date || '';
-  if (rawDate) {
-    // ESPN dates are UTC like "2026-03-19T23:00Z" — convert to Eastern for game date
-    const d = new Date(rawDate);
-    // Offset to US Eastern (UTC-4 during March DST)
-    d.setHours(d.getHours() - 4);
-    const dateKey = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    if (DATE_TO_ROUND[dateKey]) return DATE_TO_ROUND[dateKey];
-
-    // Also try the raw ISO date (first 10 chars)
-    const isoDate = rawDate.slice(0, 10);
-    if (DATE_TO_ROUND[isoDate]) return DATE_TO_ROUND[isoDate];
-  }
-
-  // Last resort: determine from today's date
-  const today = new Date();
-  today.setHours(today.getHours() - 4);
-  const todayKey = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
-  if (DATE_TO_ROUND[todayKey]) return DATE_TO_ROUND[todayKey];
-
-  // Absolute fallback: round 1
-  return 1;
-}
-
 function getDefaultState() {
   const s = JSON.parse(JSON.stringify(initialData));
   s.scores = {};
   s.eliminated = {};
   s.currentRound = 1;
-  s.processedGames = {};   // { gameId: { round, scores: {playerName: pts}, eliminated: [colleges] } }
-  s.lastFullScan = null;   // ISO timestamp of last full tournament scan
   return s;
 }
 
@@ -833,49 +683,39 @@ function getDraftedPlayersFromCollege(college) {
   return players;
 }
 
-// Fetch tournament scoreboard for a date range
-async function fetchScoreboardForDates(dates) {
-  const allEvents = [];
-  const seenIds = new Set();
-  for (const dateStr of dates) {
-    try {
-      const url = `${ESPN_SCOREBOARD}?dates=${dateStr}&groups=100&limit=100`;
-      const resp = await fetch(url);
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      for (const ev of (data.events || [])) {
-        if (!seenIds.has(ev.id)) {
-          seenIds.add(ev.id);
-          allEvents.push(ev);
-        }
+// Fetch today's scoreboard
+async function fetchScoreboard() {
+  try {
+    // Fetch today and also check for tournament games
+    // groups=100 filters to NCAA tournament games
+    const today = new Date();
+    const dateStr = today.getFullYear() + String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0');
+
+    const url = `${ESPN_SCOREBOARD}?dates=${dateStr}&groups=100&limit=100`;
+    addLog(`Fetching scoreboard: ${dateStr}`);
+
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Scoreboard HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    const events = data.events || [];
+    addLog(`Found ${events.length} tournament games today`);
+
+    // If no tournament games, try without the group filter (might be regular season)
+    if (events.length === 0) {
+      const url2 = `${ESPN_SCOREBOARD}?dates=${dateStr}&limit=100`;
+      const resp2 = await fetch(url2);
+      if (resp2.ok) {
+        const data2 = await resp2.json();
+        return data2.events || [];
       }
-    } catch(e) { /* skip failed day */ }
-  }
-  return allEvents;
-}
+    }
 
-// Get date strings from tournament start through today
-function getTournamentDates() {
-  const start = new Date(TOURNAMENT_START + 'T00:00:00');
-  const today = new Date();
-  today.setHours(23,59,59); // include all of today
-  const dates = [];
-  for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
-    dates.push(d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0'));
+    return events;
+  } catch (err) {
+    addLog(`Scoreboard error: ${err.message}`);
+    return [];
   }
-  return dates;
-}
-
-// Get just today + yesterday
-function getRecentDates() {
-  const dates = [];
-  const today = new Date();
-  for (let i = 0; i <= 1; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    dates.push(d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0'));
-  }
-  return dates;
 }
 
 // Fetch boxscore for a specific game
@@ -891,81 +731,6 @@ async function fetchBoxscore(gameId) {
   }
 }
 
-// Extract player stats from a boxscore for a given game
-function extractPlayerStats(game, data) {
-  const results = []; // { draftName, pts, college }
-  if (!data?.boxscore) return results;
-
-  const espnPlayers = data.boxscore.players || [];
-  for (const teamPlayers of espnPlayers) {
-    const matchedCollege = matchESPNTeam({ team: teamPlayers.team });
-    if (!matchedCollege || !game.relevantColleges.includes(matchedCollege)) continue;
-
-    const draftedPlayers = getDraftedPlayersFromCollege(matchedCollege);
-    const statistics = teamPlayers.statistics || [];
-
-    for (const statGroup of statistics) {
-      const rawLabels = statGroup.labels || statGroup.names || [];
-      const labels = rawLabels.map(l => l.toLowerCase());
-      const ptsIdx = labels.indexOf('pts');
-      if (ptsIdx === -1) continue;
-
-      const athletes = statGroup.athletes || [];
-      for (const athlete of athletes) {
-        const espnPlayerName = athlete.athlete?.displayName || athlete.athlete?.shortName || '';
-        for (const draftPlayer of draftedPlayers) {
-          if (namesMatch(draftPlayer.name, espnPlayerName)) {
-            const stats = athlete.stats || [];
-            const pts = parseInt(stats[ptsIdx]) || 0;
-            results.push({ draftName: draftPlayer.name, pts, college: matchedCollege });
-            break;
-          }
-        }
-      }
-    }
-  }
-  return results;
-}
-
-// Build game info from ESPN event data
-function buildGameInfo(event) {
-  const draftedColleges = getDraftedColleges();
-  const comp = (event.competitions || [])[0];
-  if (!comp) return null;
-
-  const gameInfo = {
-    id: event.id,
-    name: event.name || '',
-    shortName: event.shortName || '',
-    status: comp.status?.type?.name || 'unknown',
-    statusDetail: comp.status?.type?.detail || '',
-    clock: comp.status?.displayClock || '',
-    period: comp.status?.period || 0,
-    round: detectRound(event, comp),
-    date: event.date || '',
-    teams: [],
-    relevantColleges: []
-  };
-
-  let isRelevant = false;
-  for (const competitor of (comp.competitors || [])) {
-    const collegeName = matchESPNTeam(competitor);
-    gameInfo.teams.push({
-      espnName: competitor.team?.displayName || competitor.team?.location || 'Unknown',
-      abbreviation: competitor.team?.abbreviation || '',
-      score: parseInt(competitor.score) || 0,
-      homeAway: competitor.homeAway || '',
-      winner: competitor.winner || false,
-      draftCollege: collegeName,
-    });
-    if (collegeName && draftedColleges.has(collegeName)) {
-      isRelevant = true;
-      gameInfo.relevantColleges.push(collegeName);
-    }
-  }
-  return isRelevant ? gameInfo : null;
-}
-
 // Main live update cycle
 async function doLiveUpdate() {
   if (!liveEnabled) return;
@@ -973,111 +738,154 @@ async function doLiveUpdate() {
   addLog('Starting live update...');
   lastFetchTime = new Date();
 
-  // Initialize processedGames if missing (backward compat)
-  if (!state.processedGames) state.processedGames = {};
-
-  // Decide scan range: full tournament scan on first load or every 30 min, otherwise just recent
-  const now = Date.now();
-  const needsFullScan = !state.lastFullScan || (now - new Date(state.lastFullScan).getTime()) > 30 * 60 * 1000;
-  const datesToScan = needsFullScan ? getTournamentDates() : getRecentDates();
-  addLog(needsFullScan ? `Full tournament scan (${datesToScan.length} days)` : `Quick scan (today + yesterday)`);
-
-  const events = await fetchScoreboardForDates(datesToScan);
-  if (needsFullScan) {
-    state.lastFullScan = new Date().toISOString();
-  }
-
-  // Build game info for all relevant games
+  // Step 1: Get scoreboard
+  const events = await fetchScoreboard();
   liveGames = [];
   livePlayerStats = {};
 
+  const draftedColleges = getDraftedColleges();
+
+  // Step 2: Find games involving our colleges
+  const relevantGameIds = [];
+
   for (const event of events) {
-    const gameInfo = buildGameInfo(event);
-    if (gameInfo) liveGames.push(gameInfo);
+    const competitions = event.competitions || [];
+    for (const comp of competitions) {
+      const competitors = comp.competitors || [];
+      let isRelevant = false;
+      let gameInfo = {
+        id: event.id,
+        name: event.name || '',
+        shortName: event.shortName || '',
+        status: comp.status?.type?.name || 'unknown', // "STATUS_IN_PROGRESS", "STATUS_FINAL", "STATUS_SCHEDULED"
+        statusDetail: comp.status?.type?.detail || '',
+        clock: comp.status?.displayClock || '',
+        period: comp.status?.period || 0,
+        teams: [],
+        relevantColleges: []
+      };
+
+      for (const competitor of competitors) {
+        const collegeName = matchESPNTeam(competitor);
+        const teamData = {
+          espnName: competitor.team?.displayName || competitor.team?.location || 'Unknown',
+          abbreviation: competitor.team?.abbreviation || '',
+          score: parseInt(competitor.score) || 0,
+          homeAway: competitor.homeAway || '',
+          winner: competitor.winner || false,
+          logo: competitor.team?.logo || '',
+          draftCollege: collegeName,
+          seed: competitor.curatedRank?.current || competitor.statistics?.[0]?.displayValue || ''
+        };
+        gameInfo.teams.push(teamData);
+
+        if (collegeName && draftedColleges.has(collegeName)) {
+          isRelevant = true;
+          gameInfo.relevantColleges.push(collegeName);
+        }
+      }
+
+      if (isRelevant) {
+        liveGames.push(gameInfo);
+        relevantGameIds.push(event.id);
+      }
+    }
   }
 
   addLog(`${liveGames.length} games involve drafted players`);
 
-  // Restore locked scores from processed games into livePlayerStats for display
-  for (const [gameId, processed] of Object.entries(state.processedGames)) {
-    for (const [playerName, pts] of Object.entries(processed.scores || {})) {
-      livePlayerStats[playerName] = {
-        pts,
-        gameStatus: 'final',
-        gameClock: 'Final',
-        round: processed.round,
-        locked: true
-      };
+  // Step 3: Fetch boxscores for relevant games (in progress or final)
+  const boxscorePromises = [];
+  for (const game of liveGames) {
+    if (game.status === 'STATUS_IN_PROGRESS' || game.status === 'STATUS_FINAL' ||
+        game.status === 'STATUS_HALFTIME' || game.status === 'STATUS_END_PERIOD') {
+      boxscorePromises.push(fetchBoxscore(game.id).then(data => ({ game, data })));
     }
   }
 
-  // Fetch boxscores only for games that need it
-  const gamesToFetch = liveGames.filter(g => {
-    // Already processed and locked — skip
-    if (state.processedGames[g.id]) return false;
-    // Only fetch if in progress or final
-    return ['STATUS_IN_PROGRESS', 'STATUS_FINAL', 'STATUS_HALFTIME', 'STATUS_END_PERIOD'].includes(g.status);
-  });
+  const boxscores = await Promise.all(boxscorePromises);
 
-  addLog(`Fetching ${gamesToFetch.length} boxscores (${Object.keys(state.processedGames).length} already locked)`);
-
-  const boxscores = await Promise.all(
-    gamesToFetch.map(game => fetchBoxscore(game.id).then(data => ({ game, data })))
-  );
-
+  // Step 4: Extract player stats
   let matchedPlayers = 0;
   for (const { game, data } of boxscores) {
     if (!data) continue;
 
-    const playerResults = extractPlayerStats(game, data);
-    const round = game.round;
+    // Navigate boxscore structure
+    const boxscore = data.boxscore;
+    if (!boxscore) continue;
 
-    for (const { draftName, pts, college } of playerResults) {
-      addLog(`MATCHED: "${draftName}" → ${pts} pts (Round ${round}, game ${game.id})`);
-      matchedPlayers++;
+    const espnPlayers = boxscore.players || [];
+    for (const teamPlayers of espnPlayers) {
+      // Match boxscore team to our college using the same exact-match logic
+      const matchedCollege = matchESPNTeam({ team: teamPlayers.team });
+      if (!matchedCollege || !game.relevantColleges.includes(matchedCollege)) continue;
 
-      // Write score to the correct round
-      if (!state.scores[draftName]) state.scores[draftName] = {};
-      state.scores[draftName][round] = pts;
+      const draftedPlayers = getDraftedPlayersFromCollege(matchedCollege);
+      const statistics = teamPlayers.statistics || [];
 
-      // Update live display
-      livePlayerStats[draftName] = {
-        pts,
-        gameStatus: game.status === 'STATUS_FINAL' ? 'final' : 'in_progress',
-        gameClock: game.status === 'STATUS_FINAL' ? 'Final' :
-                   game.status === 'STATUS_HALFTIME' ? 'Halftime' :
-                   `${game.clock} - ${game.period === 1 ? '1st' : game.period === 2 ? '2nd' : 'OT'}`,
-        opponent: game.teams.find(t => t.draftCollege !== college)?.espnName || '?',
-        gameScore: game.teams.map(t => `${t.abbreviation} ${t.score}`).join(' - '),
-        round
-      };
-    }
+      addLog(`Processing ${matchedCollege}: ${draftedPlayers.map(p=>p.name).join(', ')}`);
 
-    // Handle eliminations and lock final games
-    if (game.status === 'STATUS_FINAL') {
-      // Lock this game — won't re-fetch next time
-      const lockedScores = {};
-      for (const { draftName, pts } of playerResults) {
-        lockedScores[draftName] = pts;
-      }
-      const eliminatedColleges = [];
-      for (const team of game.teams) {
-        if (team.draftCollege && !team.winner && !state.eliminated[team.draftCollege]) {
-          state.eliminated[team.draftCollege] = round;
-          eliminatedColleges.push(team.draftCollege);
-          addLog(`AUTO-ELIMINATED: ${team.draftCollege} (Round ${round})`);
+      for (const statGroup of statistics) {
+        // Find "points" index in stat labels — ESPN uses "labels" or "names"
+        const rawLabels = statGroup.labels || statGroup.names || [];
+        const labels = rawLabels.map(l => l.toLowerCase());
+        const ptsIdx = labels.indexOf('pts');
+        addLog(`Stat labels: [${rawLabels.slice(0,5).join(',')}...] ptsIdx=${ptsIdx}`);
+        if (ptsIdx === -1) continue;
+
+        const athletes = statGroup.athletes || [];
+        addLog(`Found ${athletes.length} athletes in boxscore for ${matchedCollege}`);
+        for (const athlete of athletes) {
+          const espnPlayerName = athlete.athlete?.displayName || athlete.athlete?.shortName || '';
+
+          for (const draftPlayer of draftedPlayers) {
+            if (namesMatch(draftPlayer.name, espnPlayerName)) {
+              const stats = athlete.stats || [];
+              const pts = parseInt(stats[ptsIdx]) || 0;
+              addLog(`MATCHED: "${draftPlayer.name}" ↔ "${espnPlayerName}" → ${pts} pts`);
+
+              let gameStatus = 'in_progress';
+              if (game.status === 'STATUS_FINAL') gameStatus = 'final';
+
+              livePlayerStats[draftPlayer.name] = {
+                pts,
+                gameStatus,
+                gameClock: game.status === 'STATUS_FINAL' ? 'Final' :
+                           game.status === 'STATUS_HALFTIME' ? 'Halftime' :
+                           `${game.clock} - ${game.period === 1 ? '1st' : game.period === 2 ? '2nd' : 'OT'}`,
+                opponent: game.teams.find(t => t.draftCollege !== matchedCollege)?.espnName || '?',
+                gameScore: game.teams.map(t => `${t.abbreviation} ${t.score}`).join(' - ')
+              };
+
+              matchedPlayers++;
+              break;
+            }
+          }
         }
       }
-      state.processedGames[game.id] = {
-        round,
-        scores: lockedScores,
-        eliminated: eliminatedColleges,
-        date: game.date
-      };
+    }
+
+    // Step 5: Check for eliminations (final games where a college lost)
+    if (game.status === 'STATUS_FINAL') {
+      for (const team of game.teams) {
+        if (team.draftCollege && !team.winner && !state.eliminated[team.draftCollege]) {
+          // Auto-eliminate losing teams
+          state.eliminated[team.draftCollege] = state.currentRound;
+          addLog(`AUTO-ELIMINATED: ${team.draftCollege} (lost to ${game.teams.find(t => t !== team)?.espnName})`);
+        }
+      }
     }
   }
 
-  addLog(`Matched ${matchedPlayers} players | ${Object.keys(state.processedGames).length} games locked`);
+  // Step 6: Auto-apply live scores to current round
+  for (const [playerName, stats] of Object.entries(livePlayerStats)) {
+    if (stats.gameStatus === 'final' || stats.gameStatus === 'in_progress') {
+      if (!state.scores[playerName]) state.scores[playerName] = {};
+      state.scores[playerName][state.currentRound] = stats.pts;
+    }
+  }
+
+  addLog(`Matched ${matchedPlayers} drafted players with stats`);
   saveState();
   render();
   updateLiveIndicator();
@@ -1149,9 +957,8 @@ function renderLive() {
   const final = liveGames.filter(g => g.status === 'STATUS_FINAL');
   const upcoming = liveGames.filter(g => g.status === 'STATUS_SCHEDULED' || g.status === 'STATUS_POSTPONED');
 
-  // Live player stats — only players in active (non-final) games
+  // Live player stats sorted by points
   const livePlayersArr = Object.entries(livePlayerStats)
-    .filter(([name, stats]) => stats.gameStatus === 'in_progress')
     .map(([name, stats]) => {
       const info = getTopScorers().find(p => p.name === name) || {};
       return { name, ...stats, ...info };
@@ -1305,19 +1112,34 @@ function renderStandings() {
         </div>
       ` : ''}
     </div>
-    <div class="card">
-      <h2>Team Standings</h2>
-      <table class="standings-table" style="min-width:0;">
-        <tr><th>#</th><th>Team</th><th>Active</th><th style="text-align:right">Points</th></tr>
-        ${sorted.map((t,i) => `
-          <tr>
-            <td class="rank">${i+1}</td>
-            <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TEAM_COLORS[t.idx]};margin-right:8px;"></span>${t.name}</td>
-            <td><span style="color:var(--green)">${getActivePlayers(t).length}</span>/<span style="color:var(--muted)">${t.players.length}</span></td>
-            <td class="pts" style="text-align:right">${getTeamScore(t)}</td>
-          </tr>
-        `).join('')}
-      </table>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Team Standings</h2>
+        <table>
+          <tr><th>#</th><th>Team</th><th>Active</th><th style="text-align:right">Points</th></tr>
+          ${sorted.map((t,i) => `
+            <tr>
+              <td class="rank">${i+1}</td>
+              <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TEAM_COLORS[t.idx]};margin-right:8px;"></span>${t.name}</td>
+              <td><span style="color:var(--green)">${getActivePlayers(t).length}</span>/<span style="color:var(--muted)">${t.players.length}</span></td>
+              <td class="pts" style="text-align:right">${getTeamScore(t)}</td>
+            </tr>
+          `).join('')}
+        </table>
+      </div>
+      <div class="card">
+        <h2>Points by Team</h2>
+        <div class="bar-chart">
+          ${sorted.map((t,i) => `
+            <div class="bar-row">
+              <div class="bar-label">${t.name}</div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width:${Math.max(getTeamScore(t)/maxScore*100,2)}%;background:${TEAM_COLORS[t.idx]};">${getTeamScore(t)}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
     </div>
     <div class="card" style="margin-top:20px;">
       <h2>Top 15 Scorers</h2>
@@ -1656,21 +1478,21 @@ function showToast(msg) {
 }
 
 // ===== INIT =====
-// Ensure state has processedGames (backward compat with older localStorage)
-if (!state.processedGames) { state.processedGames = {}; saveState(); }
-if (!state.lastFullScan) { state.lastFullScan = null; }
-
-// v3 migration: clear all stale data from old bugs (wrong round writes, bad matching)
-// The live feed will re-fetch and re-lock everything correctly
-if (!state._v3migrated) {
-  state.scores = {};
-  state.eliminated = {};
-  state.processedGames = {};
-  state.lastFullScan = null;
-  state.currentRound = 1;
-  state._v3migrated = true;
-  saveState();
-}
+// One-time fix: clear false eliminations caused by "South Florida" matching "Florida"
+// and "Arkansas" matching "Kansas" bugs (fixed in this version)
+(function fixBadEliminations() {
+  // Only clear if Florida was eliminated in round 1 (the false positive)
+  // Users can always re-eliminate manually if needed
+  const badMatches = ['Florida']; // add others here if found
+  let changed = false;
+  for (const college of badMatches) {
+    if (state.eliminated[college]) {
+      delete state.eliminated[college];
+      changed = true;
+    }
+  }
+  if (changed) saveState();
+})();
 
 render();
 </script>
