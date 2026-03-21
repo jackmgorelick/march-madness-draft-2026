@@ -390,6 +390,7 @@
   <div class="tab" data-tab="colleges" onclick="switchTab('colleges')">By College</div>
   <div class="tab" data-tab="eliminated" onclick="switchTab('eliminated')">Eliminations</div>
   <div class="tab" data-tab="draft" onclick="switchTab('draft')">Draft Board</div>
+  <div class="tab" data-tab="outlook" onclick="switchTab('outlook')">Outlook</div>
 </div>
 
 <div class="container" id="content"></div>
@@ -1173,6 +1174,7 @@ function render() {
     case 'colleges': c.innerHTML = renderColleges(); break;
     case 'eliminated': c.innerHTML = renderEliminated(); break;
     case 'draft': c.innerHTML = renderDraft(); break;
+    case 'outlook': c.innerHTML = renderOutlook(); break;
   }
 }
 
@@ -1687,6 +1689,293 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ===== OUTLOOK / SIMULATION =====
+
+// Pre-tournament odds → per-round survival probability for each college
+// FF odds (American) → implied P(Final Four), then derive per-round win prob
+const COLLEGE_ODDS = {
+  // EAST
+  "Duke":       { seed: 1, ff: -175, champ: 325 },
+  "UConn":      { seed: 2, ff: 450,  champ: 2000 },
+  "MSU":        { seed: 3, ff: 1150, champ: 4000 },
+  "Kansas":     { seed: 4, ff: 1000, champ: 5000 },
+  "St Johns":   { seed: 5, ff: 1300, champ: 8000 },
+  "Louisville":  { seed: 6, ff: 2500, champ: 10000 },
+  // MIDWEST
+  "Michigan":   { seed: 1, ff: -181, champ: 340 },
+  "Iowa St":    { seed: 2, ff: 450,  champ: 2200 },
+  "Virginia":   { seed: 3, ff: 2000, champ: 6000 },
+  "Alabama":    { seed: 4, ff: 2200, champ: 5000 },
+  "Texas Tech": { seed: 5, ff: 3300, champ: 8000 },
+  "Tennessee":  { seed: 6, ff: 2100, champ: 7000 },
+  "Kentucky":   { seed: 7, ff: 3000, champ: 10000 },
+  // SOUTH
+  "Florida":    { seed: 1, ff: -103, champ: 700 },
+  "Houston":    { seed: 2, ff: 210,  champ: 1000 },
+  "Illinois":   { seed: 3, ff: 360,  champ: 2200 },
+  "Nebraska":   { seed: 4, ff: 2000, champ: 6000 },
+  "Vanderbilt": { seed: 5, ff: 1400, champ: 5000 },
+  "UNC":        { seed: 6, ff: 6600, champ: 15000 },
+  "St Marys":   { seed: 7, ff: 8000, champ: 20000 },
+  // WEST
+  "Arizona":    { seed: 1, ff: -138, champ: 425 },
+  "Purdue":     { seed: 2, ff: 650,  champ: 3500 },
+  "Gonzaga":    { seed: 3, ff: 1200, champ: 4000 },
+  "Arkansas":   { seed: 4, ff: 1200, champ: 4000 },
+  "Wisconsin":  { seed: 5, ff: 1600, champ: 5000 },
+  "BYU":        { seed: 6, ff: 5000, champ: 12000 },
+  "Miami":      { seed: 7, ff: 6600, champ: 15000 },
+  "Ohio St":    { seed: 8, ff: 7100, champ: 20000 },
+  "SMU":        { seed: 11, ff: 25000, champ: 50000 },
+};
+
+// Player PPG (season averages for scoring projection)
+const PLAYER_PPG = {
+  "Cameron Boozer": 22.5, "Brayden Smith": 14.0, "Keaton Wagler": 17.9, "Jeremy Fears Jr": 15.7,
+  "Solo Ball": 13.5, "Tobe Awaka": 9.4, "Joseph Tugler": 8.4, "Otega Oweh": 18.2,
+  "Brayden Burries": 15.9, "Morez Johnson": 13.1, "Aday Mara": 11.6, "David Mirkovic": 13.4,
+  "Darryn Peterson": 19.8, "Braylin Mullins": 12.0, "Ryan Conwell": 18.7, "Maleek Thomas": 15.4,
+  "Darius Acuff Jr": 22.9, "Emmanuel Sharp": 15.3, "Andrej Stokajovic": 13.4, "Trey Kaufman-Renn": 13.6,
+  "John Blackwell": 19.0, "Anthony Dell Orso": 9.0, "Rob Wright": 18.2, "Henri Veesar": 16.7,
+  "Thomas Haugh": 17.1, "Tamin Lipsey": 13.3, "Boogie Fland": 11.6, "Milos Uzan": 11.1,
+  "Tyler Tanner": 19.1, "Donovan Atwell": 13.5, "Boopie Miller": 19.2, "Tyon Grant-Foster": 11.2,
+  "Yaxel Lendeborg": 14.6, "Koa Peat": 13.6, "Patrick Ngongba": 10.7, "Xaivian Lee": 11.5,
+  "Nick Boyd": 20.6, "Jaxon Kohler": 12.7, "Malik Thomas": 12.4, "Tre White": 13.8,
+  "Jaden Bradley": 13.3, "Alex Condon": 15.0, "Fletcher Loyer": 13.8, "Jakobi Gillespie": 18.0,
+  "Zuby Ejofor": 16.3, "Trey Mckinney": 9.6, "Oscar Cluff": 10.6, "Silas Demary Jr": 10.9,
+  "Milan Momcilovic": 17.1, "AJ Dybantsa": 25.3, "Alex Karaban": 12.6, "Thijs De Ridder": 15.5,
+  "Pryce Sandfort": 17.8, "Paulius Murauskas": 18.8, "Malik Reneau": 18.8, "Bruce Thornton": 20.2,
+  "Isaiah Evans": 14.9, "Graham Ike": 19.7, "Labaron Philon": 21.7, "Cayden Boozer": 7.1,
+  "Elliot Cadeau": 10.2, "Ivan Karchenkov": 10.1, "Chris Cenac": 9.5, "Nate Ament": 17.5,
+  "Kingston Flemings": 16.4, "Joshua Jefferson": 16.9, "Motiejus Krivas": 10.5, "Tarris Reed Jr": 13.7,
+  "Rueben Chinyelu": 11.2, "Christian Anderson": 18.9, "Duke Miles": 16.5, "Bryce Hopkins": 13.5,
+};
+
+function americanToProb(odds) {
+  if (odds < 0) return Math.abs(odds) / (Math.abs(odds) + 100);
+  return 100 / (odds + 100);
+}
+
+function getPerRoundSurvival(college) {
+  const odds = COLLEGE_ODDS[college];
+  if (!odds) return 0.3; // unknown team, low default
+  const pFF = americanToProb(odds.ff);
+  // P(FF) = P(win R64) × P(win R32) × P(win S16) × P(win E8) = survivalRate^4
+  // So per-round survival ≈ pFF^(1/4)
+  return Math.pow(pFF, 0.25);
+}
+
+function getChampProb(college) {
+  const odds = COLLEGE_ODDS[college];
+  if (!odds) return 0.001;
+  return americanToProb(odds.champ);
+}
+
+// Determine which round a college is currently in (next game to play)
+function getCurrentRoundForCollege(college) {
+  const elimRound = state.eliminated[college];
+  if (elimRound) return -1; // eliminated
+  // Find the highest round this college has scored in
+  let maxRound = 0;
+  state.teams.forEach(t => t.players.forEach(p => {
+    if (p.college === college && state.scores[p.name]) {
+      Object.keys(state.scores[p.name]).forEach(r => {
+        if (parseInt(r) > maxRound) maxRound = parseInt(r);
+      });
+    }
+  }));
+  return maxRound + 1; // next round to play
+}
+
+function runSimulation(numSims = 10000) {
+  const teamWins = new Array(state.teams.length).fill(0);
+  const teamTotalScores = new Array(state.teams.length).fill(0);
+
+  for (let sim = 0; sim < numSims; sim++) {
+    const simScores = state.teams.map((t, ti) => {
+      // Start with current actual score
+      let total = getTeamScore(t);
+
+      // Project future rounds for each active player
+      t.players.forEach(p => {
+        if (isPlayerEliminated(p)) return;
+
+        const ppg = PLAYER_PPG[p.name] || 10;
+        const survival = getPerRoundSurvival(p.college);
+        const nextRound = getCurrentRoundForCollege(p.college);
+
+        if (nextRound < 0 || nextRound > 6) return;
+
+        // Simulate each remaining round
+        let alive = true;
+        for (let r = nextRound; r <= 6 && alive; r++) {
+          // Does the team survive this round?
+          if (Math.random() < survival) {
+            // Player scores with variance (PPG ± 40% std dev, min 0)
+            const pts = Math.max(0, ppg + (Math.random() - 0.5) * 2 * ppg * 0.4);
+            total += pts;
+          } else {
+            alive = false;
+          }
+        }
+      });
+
+      return total;
+    });
+
+    // Find winner of this sim
+    let maxScore = -1, winner = -1;
+    simScores.forEach((s, i) => {
+      if (s > maxScore) { maxScore = s; winner = i; }
+    });
+    teamWins[winner]++;
+    simScores.forEach((s, i) => teamTotalScores[i] += s);
+  }
+
+  return state.teams.map((t, i) => ({
+    name: t.name,
+    idx: i,
+    currentScore: getTeamScore(t),
+    activePlayers: getActivePlayers(t).length,
+    eliminatedPlayers: t.players.filter(p => isPlayerEliminated(p)).length,
+    winProb: (teamWins[i] / numSims * 100),
+    avgProjectedScore: Math.round(teamTotalScores[i] / numSims),
+    players: t.players,
+  }));
+}
+
+function renderOutlook() {
+  const results = runSimulation(10000);
+  const sorted = [...results].sort((a, b) => b.winProb - a.winProb);
+  const maxProb = Math.max(...sorted.map(r => r.winProb), 1);
+  const maxProj = Math.max(...sorted.map(r => r.avgProjectedScore), 1);
+
+  // Get eliminated colleges list
+  const elimColleges = Object.entries(state.eliminated).map(([college, round]) => ({
+    college, round: ROUND_NAMES[round] || `R${round}`
+  }));
+
+  return `
+    <div style="margin-bottom:24px;">
+      <h2 style="font-size:22px;margin-bottom:4px;">Post-R64 Outlook</h2>
+      <p style="color:var(--muted);font-size:13px;">Win probabilities based on 10,000 Monte Carlo simulations using current scores + projected remaining points (player PPG × survival probability from pre-tournament odds).</p>
+    </div>
+
+    <div class="grid-3" style="margin-bottom:24px;">
+      <div class="card">
+        <div class="stat-label">Simulation Favorite</div>
+        <div class="stat-value" style="font-size:22px;margin-top:8px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${TEAM_COLORS[sorted[0].idx]};margin-right:8px;"></span>${sorted[0].name}</div>
+        <div style="color:var(--green);font-size:15px;font-weight:700;margin-top:4px;">${sorted[0].winProb.toFixed(1)}% win probability</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">Highest Projected Score</div>
+        <div class="stat-value" style="font-size:22px;margin-top:8px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${TEAM_COLORS[[...results].sort((a,b) => b.avgProjectedScore - a.avgProjectedScore)[0].idx]};margin-right:8px;"></span>${[...results].sort((a,b) => b.avgProjectedScore - a.avgProjectedScore)[0].name}</div>
+        <div style="color:var(--accent);font-size:15px;font-weight:700;margin-top:4px;">${[...results].sort((a,b) => b.avgProjectedScore - a.avgProjectedScore)[0].avgProjectedScore} projected pts</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">Players Eliminated</div>
+        <div class="stat-value" style="font-size:32px;margin-top:8px;">
+          <span style="color:var(--red)">${results.reduce((s,r) => s + r.eliminatedPlayers, 0)}</span>
+          <span style="color:var(--muted);font-size:16px;">/ ${results.reduce((s,r) => s + r.activePlayers + r.eliminatedPlayers, 0)}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>Win Probability</h2>
+        <div class="bar-chart" style="margin-top:12px;">
+          ${sorted.map(r => `
+            <div class="bar-row">
+              <div class="bar-label"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TEAM_COLORS[r.idx]};margin-right:6px;"></span>${r.name}</div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width:${Math.max(r.winProb / maxProb * 100, 2)}%;background:${TEAM_COLORS[r.idx]};">${r.winProb.toFixed(1)}%</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Projected Final Score</h2>
+        <div class="bar-chart" style="margin-top:12px;">
+          ${[...results].sort((a,b) => b.avgProjectedScore - a.avgProjectedScore).map(r => `
+            <div class="bar-row">
+              <div class="bar-label"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TEAM_COLORS[r.idx]};margin-right:6px;"></span>${r.name}</div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width:${Math.max(r.avgProjectedScore / maxProj * 100, 2)}%;background:${TEAM_COLORS[r.idx]};">${r.currentScore} + ${r.avgProjectedScore - r.currentScore} = ${r.avgProjectedScore}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h2>Team Breakdown</h2>
+      <table>
+        <tr><th>#</th><th>Team</th><th>Current Pts</th><th>Proj. Final</th><th>Active</th><th>Win Prob</th></tr>
+        ${sorted.map((r, i) => `
+          <tr>
+            <td class="rank">${i+1}</td>
+            <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TEAM_COLORS[r.idx]};margin-right:8px;"></span>${r.name}</td>
+            <td class="pts">${r.currentScore}</td>
+            <td class="pts" style="color:var(--accent);">${r.avgProjectedScore}</td>
+            <td><span style="color:var(--green)">${r.activePlayers}</span> / <span style="color:var(--red)">${r.eliminatedPlayers}</span></td>
+            <td style="font-weight:700;color:${r.winProb > 20 ? 'var(--green)' : r.winProb > 10 ? 'var(--yellow)' : 'var(--muted)'};">${r.winProb.toFixed(1)}%</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h2>Player Outlook</h2>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">Expected remaining points = PPG × expected remaining games (from survival probability)</p>
+      <table>
+        <tr><th>Player</th><th>College</th><th>Team</th><th>Status</th><th>PPG</th><th>Current Pts</th><th style="text-align:right">Exp. Remaining</th></tr>
+        ${getTopScorers().map(p => {
+          const ppg = PLAYER_PPG[p.name] || 10;
+          const survival = getPerRoundSurvival(p.college);
+          const nextRound = getCurrentRoundForCollege(p.college);
+          let expRemaining = 0;
+          if (!isPlayerEliminated(p) && nextRound > 0 && nextRound <= 6) {
+            let cumSurvival = 1;
+            for (let r = nextRound; r <= 6; r++) {
+              cumSurvival *= survival;
+              expRemaining += ppg * cumSurvival;
+            }
+          }
+          return { ...p, ppg, expRemaining: Math.round(expRemaining) };
+        }).sort((a,b) => b.expRemaining - a.expRemaining).map(p => `
+          <tr class="${isPlayerEliminated(p) ? 'eliminated-row' : ''}">
+            <td>${p.name}</td>
+            <td class="college-team">${p.college}</td>
+            <td><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${TEAM_COLORS[p.teamIdx]};margin-right:6px;"></span>${p.teamName}</td>
+            <td>${isPlayerEliminated(p) ? '<span class="badge badge-eliminated">OUT</span>' : '<span class="badge badge-active">ACTIVE</span>'}</td>
+            <td style="color:var(--muted);">${p.ppg.toFixed(1)}</td>
+            <td class="pts">${p.totalPts}</td>
+            <td class="pts" style="text-align:right;color:${p.expRemaining > 0 ? 'var(--green)' : 'var(--red)'};">${p.expRemaining > 0 ? '+' + p.expRemaining : '0'}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+
+    ${elimColleges.length > 0 ? `
+    <div class="card" style="margin-top:20px;">
+      <h2>Eliminated Colleges</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+        ${elimColleges.map(e => `<span class="badge badge-eliminated" style="font-size:13px;padding:4px 12px;">${e.college} (${e.round})</span>`).join('')}
+      </div>
+    </div>
+    ` : ''}
+
+    <div style="margin-top:16px;padding:12px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:12px;color:var(--muted);">
+      <strong style="color:var(--accent);">How it works:</strong> Each simulation projects remaining games using pre-tournament Vegas odds (converted to per-round survival rates). Players score their season PPG ±40% variance per game. 10,000 simulations determine win probability.
+      <br><strong style="color:var(--accent);">Note:</strong> Probabilities update automatically as scores are tracked. Teams with more active players on strong tournament teams have higher upside.
+    </div>
+  `;
 }
 
 // ===== INIT =====
