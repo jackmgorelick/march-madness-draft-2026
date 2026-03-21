@@ -1811,13 +1811,12 @@ function runSimulation(numSims = 10000) {
         // Simulate each remaining round
         let alive = true;
         for (let r = nextRound; r <= 6 && alive; r++) {
-          // Does the team survive this round?
-          if (Math.random() < survival) {
-            // Player scores with variance (PPG ± 40% std dev, min 0)
-            const pts = Math.max(0, ppg + (Math.random() - 0.5) * 2 * ppg * 0.4);
-            total += pts;
-          } else {
-            alive = false;
+          // Player scores in this game regardless of outcome (they still play)
+          const pts = Math.max(0, ppg + (Math.random() - 0.5) * 2 * ppg * 0.4);
+          total += pts;
+          // Does the team advance to the next round?
+          if (Math.random() >= survival) {
+            alive = false; // eliminated, no more games
           }
         }
       });
@@ -1943,8 +1942,8 @@ function renderOutlook() {
           if (!isPlayerEliminated(p) && nextRound > 0 && nextRound <= 6) {
             let cumSurvival = 1;
             for (let r = nextRound; r <= 6; r++) {
-              cumSurvival *= survival;
-              expRemaining += ppg * cumSurvival;
+              expRemaining += ppg * cumSurvival; // scores in this game
+              cumSurvival *= survival; // then might not advance
             }
           }
           return { ...p, ppg, expRemaining: Math.round(expRemaining) };
