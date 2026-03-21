@@ -1760,24 +1760,48 @@ function americanToProb(odds) {
   return 100 / (odds + 100);
 }
 
-function getPerRoundSurvival(college) {
+// Round-by-round win probabilities by seed (historical NCAA averages)
+// Indexed: [R32, S16, E8, FF, Championship]
+const SEED_ROUND_PROBS = {
+  1: [0.92, 0.80, 0.65, 0.55, 0.50],
+  2: [0.85, 0.65, 0.55, 0.50, 0.45],
+  3: [0.78, 0.55, 0.45, 0.45, 0.40],
+  4: [0.72, 0.50, 0.40, 0.40, 0.38],
+  5: [0.65, 0.45, 0.35, 0.35, 0.32],
+  6: [0.60, 0.40, 0.33, 0.33, 0.30],
+  7: [0.58, 0.38, 0.30, 0.30, 0.28],
+  8: [0.50, 0.35, 0.28, 0.28, 0.25],
+  9: [0.50, 0.35, 0.28, 0.28, 0.25],
+  10: [0.42, 0.32, 0.25, 0.25, 0.22],
+  11: [0.38, 0.30, 0.22, 0.22, 0.20],
+  12: [0.35, 0.28, 0.20, 0.20, 0.18],
+};
+
+// Get round-specific survival rates for a college, adjusted by their actual odds
+function getRoundProbs(college) {
   const odds = COLLEGE_ODDS[college];
-  if (!odds) return 0.3; // unknown team, low default
-  // Use championship probability and derive per-round survival
-  // P(champ) = survivalRate^(remaining rounds). Post-R64, 5 rounds remain (R32→Championship)
-  // But survival rate from champ odds can be too low for mid-seeds.
-  // Better approach: use FF odds for near-term, champ for full picture
-  // P(FF) from current odds = need to win 3 more games (R32, S16, E8)
-  // Per-round survival = P(FF)^(1/3)
-  const pFF = americanToProb(odds.ff);
+  if (!odds) return [0.30, 0.25, 0.20, 0.20, 0.18];
+  const seed = odds.seed;
+  const baseProbs = SEED_ROUND_PROBS[Math.min(seed, 12)] || SEED_ROUND_PROBS[12];
+
+  // Adjust based on how this team's champ odds compare to seed average
+  // Teams with better odds than typical for their seed get a boost
   const pChamp = americanToProb(odds.champ);
-  // Blend: use FF-derived rate for consistency (3 games to FF)
-  const survivalFromFF = Math.pow(pFF, 1/3);
-  // For FF→Champ (2 more games), use champ/FF ratio
-  // Overall per-round = P(champ)^(1/5) across 5 remaining games
-  const survivalFromChamp = Math.pow(pChamp, 1/5);
-  // Use the champ-derived rate as it covers all remaining rounds
-  return Math.min(survivalFromChamp, 0.95); // cap at 95%
+  // Approximate expected champ prob for seed: product of base probs
+  const baseChamp = baseProbs.reduce((a, b) => a * b, 1);
+  // Ratio: if team is 2x more likely than seed avg, boost each round prob
+  const ratio = baseChamp > 0 ? pChamp / baseChamp : 1;
+  const adjustment = Math.pow(ratio, 1/5); // spread adjustment across 5 rounds
+
+  return baseProbs.map(p => Math.min(p * adjustment, 0.95));
+}
+
+// Legacy helper — average per-round survival for simple calculations
+function getPerRoundSurvival(college) {
+  const probs = getRoundProbs(college);
+  // Geometric mean of round probs
+  const product = probs.reduce((a, b) => a * b, 1);
+  return Math.pow(product, 1/5);
 }
 
 function getChampProb(college) {
@@ -1816,20 +1840,23 @@ function runSimulation(numSims = 10000) {
         if (isPlayerEliminated(p)) return;
 
         const ppg = PLAYER_PPG[p.name] || 10;
-        const survival = getPerRoundSurvival(p.college);
+        const roundProbs = getRoundProbs(p.college);
         const nextRound = getCurrentRoundForCollege(p.college);
 
         if (nextRound < 0 || nextRound > 6) return;
 
-        // Simulate each remaining round
+        // Simulate each remaining round with round-specific win rates
         let alive = true;
         for (let r = nextRound; r <= 6 && alive; r++) {
           // Player scores in this game regardless of outcome (they still play)
           const pts = Math.max(0, ppg + (Math.random() - 0.5) * 2 * ppg * 0.4);
           total += pts;
-          // Does the team advance to the next round?
-          if (Math.random() >= survival) {
-            alive = false; // eliminated, no more games
+          // Does the team advance? Use round-specific probability
+          // roundProbs[0]=R32, [1]=S16, [2]=E8, [3]=FF, [4]=Champ
+          const roundIdx = r - 2; // r=2 is R32 → index 0
+          const winProb = roundProbs[Math.max(0, Math.min(roundIdx, 4))] || 0.3;
+          if (Math.random() >= winProb) {
+            alive = false;
           }
         }
       });
@@ -1847,19 +1874,24 @@ function runSimulation(numSims = 10000) {
   }
 
   return state.teams.map((t, i) => {
-    // Calculate avg expected games remaining for this team
+    // Calculate avg expected games remaining per player
     let teamExpGames = 0;
+    let activeCt = 0;
     t.players.forEach(p => {
       if (isPlayerEliminated(p)) return;
-      const survival = getPerRoundSurvival(p.college);
+      activeCt++;
+      const roundProbs = getRoundProbs(p.college);
       const nextRound = getCurrentRoundForCollege(p.college);
       if (nextRound < 0 || nextRound > 6) return;
       let cumSurvival = 1;
       for (let r = nextRound; r <= 6; r++) {
         teamExpGames += cumSurvival;
-        cumSurvival *= survival;
+        const roundIdx = r - 2;
+        const winProb = roundProbs[Math.max(0, Math.min(roundIdx, 4))] || 0.3;
+        cumSurvival *= winProb;
       }
     });
+    const avgExpGamesPerPlayer = activeCt > 0 ? teamExpGames / activeCt : 0;
 
     return {
       name: t.name,
@@ -1869,7 +1901,7 @@ function runSimulation(numSims = 10000) {
       eliminatedPlayers: t.players.filter(p => isPlayerEliminated(p)).length,
       winProb: (teamWins[i] / numSims * 100),
       avgProjectedScore: Math.round(teamTotalScores[i] / numSims),
-      avgExpGames: teamExpGames,
+      avgExpGames: avgExpGamesPerPlayer,
       players: t.players,
     };
   });
@@ -1945,7 +1977,7 @@ function renderOutlook() {
     <div class="card" style="margin-top:20px;">
       <h2>Team Breakdown</h2>
       <table>
-        <tr><th>#</th><th>Team</th><th>Current Pts</th><th>Proj. Final</th><th>Active</th><th style="text-align:center">Avg Exp. Games</th><th>Win Prob</th></tr>
+        <tr><th>#</th><th>Team</th><th>Current Pts</th><th>Proj. Final</th><th>Active</th><th style="text-align:center">Avg Games/Player</th><th>Win Prob</th></tr>
         ${sorted.map((r, i) => `
           <tr>
             <td class="rank">${i+1}</td>
@@ -1971,12 +2003,16 @@ function renderOutlook() {
           const nextRound = getCurrentRoundForCollege(p.college);
           let expRemaining = 0;
           let expGames = 0;
+          const roundProbs = getRoundProbs(p.college);
           if (!isPlayerEliminated(p) && nextRound > 0 && nextRound <= 6) {
             let cumSurvival = 1;
             for (let r = nextRound; r <= 6; r++) {
               expRemaining += ppg * cumSurvival; // scores in this game
               expGames += cumSurvival; // expected games
-              cumSurvival *= survival; // then might not advance
+              // Then might not advance — use round-specific probability
+              const roundIdx = r - 2; // r=2 is R32 → index 0
+              const winProb = roundProbs[Math.max(0, Math.min(roundIdx, 4))] || 0.3;
+              cumSurvival *= winProb;
             }
           }
           return { ...p, ppg, expRemaining: Math.round(expRemaining), expGames };
