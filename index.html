@@ -1693,42 +1693,44 @@ function showToast(msg) {
 
 // ===== OUTLOOK / SIMULATION =====
 
-// Pre-tournament odds → per-round survival probability for each college
-// FF odds (American) → implied P(Final Four), then derive per-round win prob
+// Post-R64 updated odds (March 21 2026, via ESPN/Yahoo Sports)
+// Championship odds in American format, FF odds post-R64
+// Eliminated teams are tracked via state.eliminated, not listed here
 const COLLEGE_ODDS = {
-  // EAST
-  "Duke":       { seed: 1, ff: -175, champ: 325 },
-  "UConn":      { seed: 2, ff: 450,  champ: 2000 },
-  "MSU":        { seed: 3, ff: 1150, champ: 4000 },
-  "Kansas":     { seed: 4, ff: 1000, champ: 5000 },
-  "St Johns":   { seed: 5, ff: 1300, champ: 8000 },
-  "Louisville":  { seed: 6, ff: 2500, champ: 10000 },
-  // MIDWEST
-  "Michigan":   { seed: 1, ff: -181, champ: 340 },
-  "Iowa St":    { seed: 2, ff: 450,  champ: 2200 },
-  "Virginia":   { seed: 3, ff: 2000, champ: 6000 },
-  "Alabama":    { seed: 4, ff: 2200, champ: 5000 },
-  "Texas Tech": { seed: 5, ff: 3300, champ: 8000 },
-  "Tennessee":  { seed: 6, ff: 2100, champ: 7000 },
-  "Kentucky":   { seed: 7, ff: 3000, champ: 10000 },
-  // SOUTH
-  "Florida":    { seed: 1, ff: -103, champ: 700 },
-  "Houston":    { seed: 2, ff: 210,  champ: 1000 },
-  "Illinois":   { seed: 3, ff: 360,  champ: 2200 },
-  "Nebraska":   { seed: 4, ff: 2000, champ: 6000 },
-  "Vanderbilt": { seed: 5, ff: 1400, champ: 5000 },
-  "UNC":        { seed: 6, ff: 6600, champ: 15000 },
-  "St Marys":   { seed: 7, ff: 8000, champ: 20000 },
-  // WEST
-  "Arizona":    { seed: 1, ff: -138, champ: 425 },
-  "Purdue":     { seed: 2, ff: 650,  champ: 3500 },
-  "Gonzaga":    { seed: 3, ff: 1200, champ: 4000 },
-  "Arkansas":   { seed: 4, ff: 1200, champ: 4000 },
-  "Wisconsin":  { seed: 5, ff: 1600, champ: 5000 },
-  "BYU":        { seed: 6, ff: 5000, champ: 12000 },
-  "Miami":      { seed: 7, ff: 6600, champ: 15000 },
-  "Ohio St":    { seed: 8, ff: 7100, champ: 20000 },
-  "SMU":        { seed: 11, ff: 25000, champ: 50000 },
+  // EAST (R32: Duke vs TCU, MSU vs Louisville, UConn vs UCLA, Kansas vs St Johns)
+  "Duke":       { seed: 1, ff: 200,   champ: 425 },
+  "UConn":      { seed: 2, ff: 1000,  champ: 2500 },
+  "MSU":        { seed: 3, ff: 1200,  champ: 5000 },
+  "Kansas":     { seed: 4, ff: 2200,  champ: 7000 },
+  "St Johns":   { seed: 5, ff: 2500,  champ: 6000 },
+  "Louisville":  { seed: 6, ff: 4500, champ: 12000 },
+  // MIDWEST (R32: Michigan vs St Louis, Iowa St vs Kentucky, Virginia vs Alabama, Texas Tech vs Tennessee)
+  "Michigan":   { seed: 1, ff: 180,   champ: 370 },
+  "Iowa St":    { seed: 2, ff: 750,   champ: 1800 },
+  "Virginia":   { seed: 3, ff: 3000,  champ: 7500 },
+  "Alabama":    { seed: 4, ff: 3500,  champ: 18000 },
+  "Texas Tech": { seed: 5, ff: 3500,  champ: 13000 },
+  "Tennessee":  { seed: 6, ff: 4000,  champ: 13000 },
+  "Kentucky":   { seed: 7, ff: 4500,  champ: 20000 },
+  // SOUTH (R32: Florida vs ?, Houston vs Texas A&M, Illinois vs VCU, Nebraska vs Vanderbilt)
+  "Florida":    { seed: 1, ff: 330,   champ: 800 },
+  "Houston":    { seed: 2, ff: 450,   champ: 950 },
+  "Illinois":   { seed: 3, ff: 750,   champ: 1800 },
+  "Nebraska":   { seed: 4, ff: 3000,  champ: 8000 },
+  "Vanderbilt": { seed: 5, ff: 2000,  champ: 6000 },
+  // WEST (R32: Arizona vs ?, Purdue vs Miami, Gonzaga vs Texas, Arkansas vs High Point)
+  "Arizona":    { seed: 1, ff: 150,   champ: 340 },
+  "Purdue":     { seed: 2, ff: 900,   champ: 2500 },
+  "Gonzaga":    { seed: 3, ff: 2200,  champ: 5500 },
+  "Arkansas":   { seed: 4, ff: 1400,  champ: 5000 },
+  "Miami":      { seed: 7, ff: 8000,  champ: 40000 },
+  // ELIMINATED in R64 — odds zeroed out (handled by state.eliminated)
+  "Wisconsin":  { seed: 5, ff: 99999, champ: 99999 },
+  "BYU":        { seed: 6, ff: 99999, champ: 99999 },
+  "UNC":        { seed: 6, ff: 99999, champ: 99999 },
+  "St Marys":   { seed: 7, ff: 99999, champ: 99999 },
+  "Ohio St":    { seed: 8, ff: 99999, champ: 99999 },
+  "SMU":        { seed: 11, ff: 99999, champ: 99999 },
 };
 
 // Player PPG (season averages for scoring projection)
@@ -1761,10 +1763,21 @@ function americanToProb(odds) {
 function getPerRoundSurvival(college) {
   const odds = COLLEGE_ODDS[college];
   if (!odds) return 0.3; // unknown team, low default
+  // Use championship probability and derive per-round survival
+  // P(champ) = survivalRate^(remaining rounds). Post-R64, 5 rounds remain (R32→Championship)
+  // But survival rate from champ odds can be too low for mid-seeds.
+  // Better approach: use FF odds for near-term, champ for full picture
+  // P(FF) from current odds = need to win 3 more games (R32, S16, E8)
+  // Per-round survival = P(FF)^(1/3)
   const pFF = americanToProb(odds.ff);
-  // P(FF) = P(win R64) × P(win R32) × P(win S16) × P(win E8) = survivalRate^4
-  // So per-round survival ≈ pFF^(1/4)
-  return Math.pow(pFF, 0.25);
+  const pChamp = americanToProb(odds.champ);
+  // Blend: use FF-derived rate for consistency (3 games to FF)
+  const survivalFromFF = Math.pow(pFF, 1/3);
+  // For FF→Champ (2 more games), use champ/FF ratio
+  // Overall per-round = P(champ)^(1/5) across 5 remaining games
+  const survivalFromChamp = Math.pow(pChamp, 1/5);
+  // Use the champ-derived rate as it covers all remaining rounds
+  return Math.min(survivalFromChamp, 0.95); // cap at 95%
 }
 
 function getChampProb(college) {
@@ -1876,7 +1889,7 @@ function renderOutlook() {
   return `
     <div style="margin-bottom:24px;">
       <h2 style="font-size:22px;margin-bottom:4px;">Post-R64 Outlook</h2>
-      <p style="color:var(--muted);font-size:13px;">Win probabilities based on 10,000 Monte Carlo simulations using current scores + projected remaining points (player PPG × survival probability from pre-tournament odds).</p>
+      <p style="color:var(--muted);font-size:13px;">Win probabilities based on 10,000 Monte Carlo simulations using current scores + projected remaining points (player PPG × survival probability from post-R64 Vegas odds, updated March 21).</p>
     </div>
 
     <div class="grid-3" style="margin-bottom:24px;">
@@ -1992,7 +2005,7 @@ function renderOutlook() {
     ` : ''}
 
     <div style="margin-top:16px;padding:12px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:12px;color:var(--muted);">
-      <strong style="color:var(--accent);">How it works:</strong> Each simulation projects remaining games using pre-tournament Vegas odds (converted to per-round survival rates). Players score their season PPG ±40% variance per game. 10,000 simulations determine win probability.
+      <strong style="color:var(--accent);">How it works:</strong> Each simulation projects remaining games using post-R64 Vegas odds (ESPN/Yahoo, March 21). Championship odds → per-round survival rates. Players score their season PPG ±40% variance per game. 10,000 simulations determine win probability.
       <br><strong style="color:var(--accent);">Note:</strong> Probabilities update automatically as scores are tracked. Teams with more active players on strong tournament teams have higher upside.
     </div>
   `;
