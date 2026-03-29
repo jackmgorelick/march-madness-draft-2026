@@ -1826,6 +1826,14 @@ function getCurrentRoundForCollege(college) {
   return maxRound + 1; // next round to play
 }
 
+// Normal distribution via Box-Muller (mean=0, stddev=1)
+function randNormal() {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+
 function runSimulation(numSims = 10000) {
   const teamWins = new Array(state.teams.length).fill(0);
   const teamTotalScores = new Array(state.teams.length).fill(0);
@@ -1848,8 +1856,9 @@ function runSimulation(numSims = 10000) {
         // Simulate each remaining round with round-specific win rates
         let alive = true;
         for (let r = nextRound; r <= 6 && alive; r++) {
-          // Player scores in this game regardless of outcome (they still play)
-          const pts = Math.max(0, ppg + (Math.random() - 0.5) * 2 * ppg * 0.4);
+          // Player scores with realistic tournament variance (stddev ~55% of PPG)
+          // Allows for huge games (30+) and duds (2-5 pts)
+          const pts = Math.max(0, Math.round(ppg + randNormal() * ppg * 0.55));
           total += pts;
           // Does the team advance? Use round-specific probability
           // roundProbs[0]=R32, [1]=S16, [2]=E8, [3]=FF, [4]=Champ
@@ -2041,7 +2050,7 @@ function renderOutlook() {
     ` : ''}
 
     <div style="margin-top:16px;padding:12px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:12px;color:var(--muted);">
-      <strong style="color:var(--accent);">How it works:</strong> Each simulation projects remaining games using post-S16 odds (Yahoo Sports, March 29). Seed-based round-by-round survival rates adjusted by championship odds. Players score their season PPG ±40% variance per game. 10,000 simulations determine win probability.
+      <strong style="color:var(--accent);">How it works:</strong> Each simulation projects remaining games using post-S16 odds (Yahoo Sports, March 29). Seed-based round-by-round survival rates adjusted by championship odds. Players score with realistic tournament variance (normal distribution, stddev ~55% of PPG). 10,000 simulations determine win probability.
       <br><strong style="color:var(--accent);">Note:</strong> Probabilities update automatically as scores are tracked. Teams with more active players on strong tournament teams have higher upside.
     </div>
   `;
