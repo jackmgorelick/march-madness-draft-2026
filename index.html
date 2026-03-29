@@ -1693,33 +1693,29 @@ function showToast(msg) {
 
 // ===== OUTLOOK / SIMULATION =====
 
-// Post-R32 updated odds (March 23 2026, via ESPN)
-// Sweet 16 matchups:
-//   EAST: (1) Duke vs (5) St Johns, (2) UConn vs (3) MSU
-//   MIDWEST: (1) Michigan vs (4) Alabama, (2) Iowa St vs (6) Tennessee
-//   SOUTH: (9) Iowa vs (4) Nebraska, (2) Houston vs (3) Illinois
-//   WEST: (1) Arizona vs (4) Arkansas, (2) Purdue vs (11) Texas
-// Florida (1-seed) upset by Iowa! Gonzaga eliminated by Texas!
+// Post-S16 / Elite 8 updated odds (March 29 2026, via Yahoo Sports)
+// FINAL FOUR LOCKED: Arizona (W), Illinois (S)
+// Elite 8 TODAY: Michigan vs Tennessee (LIVE — Michigan dominating),
+//               Duke vs UConn (tonight)
+// Houston (2) upset by Illinois! Iowa State upset by Tennessee!
 const COLLEGE_ODDS = {
-  // EAST — Sweet 16: Duke vs St Johns, UConn vs MSU
-  "Duke":       { seed: 1, ff: 160,   champ: 425 },
-  "UConn":      { seed: 2, ff: 1900,  champ: 3000 },
-  "MSU":        { seed: 3, ff: 1100,  champ: 3000 },
-  "St Johns":   { seed: 5, ff: 2000,  champ: 5000 },
-  // MIDWEST — Sweet 16: Michigan vs Alabama, Iowa St vs Tennessee
-  "Michigan":   { seed: 1, ff: 155,   champ: 340 },
-  "Iowa St":    { seed: 2, ff: 950,   champ: 3000 },
-  "Alabama":    { seed: 4, ff: 2200,  champ: 8000 },
-  "Tennessee":  { seed: 6, ff: 2200,  champ: 8000 },
-  // SOUTH — Sweet 16: Iowa vs Nebraska, Houston vs Illinois
-  "Houston":    { seed: 2, ff: 400,   champ: 850 },
-  "Illinois":   { seed: 3, ff: 750,   champ: 1700 },
-  "Nebraska":   { seed: 4, ff: 1800,  champ: 6000 },
-  // WEST — Sweet 16: Arizona vs Arkansas, Purdue vs Texas
-  "Arizona":    { seed: 1, ff: 160,   champ: 350 },
-  "Purdue":     { seed: 2, ff: 600,   champ: 1600 },
-  "Arkansas":   { seed: 4, ff: 2000,  champ: 3500 },
-  // ELIMINATED — handled by state.eliminated but kept for reference
+  // FINAL FOUR (already through)
+  "Arizona":    { seed: 1, ff: -900,  champ: 165 },
+  "Illinois":   { seed: 3, ff: -900,  champ: 550 },
+  // ELITE 8 TODAY
+  "Michigan":   { seed: 1, ff: -300,  champ: 300 },
+  "Duke":       { seed: 1, ff: 110,   champ: 320 },
+  "UConn":      { seed: 2, ff: 400,   champ: 1500 },
+  "Tennessee":  { seed: 6, ff: 800,   champ: 3500 },
+  // ELIMINATED — handled by state.eliminated
+  "St Johns":   { seed: 5, ff: 99999, champ: 99999 },
+  "MSU":        { seed: 3, ff: 99999, champ: 99999 },
+  "Alabama":    { seed: 4, ff: 99999, champ: 99999 },
+  "Iowa St":    { seed: 2, ff: 99999, champ: 99999 },
+  "Houston":    { seed: 2, ff: 99999, champ: 99999 },
+  "Nebraska":   { seed: 4, ff: 99999, champ: 99999 },
+  "Purdue":     { seed: 2, ff: 99999, champ: 99999 },
+  "Arkansas":   { seed: 4, ff: 99999, champ: 99999 },
   "Florida":    { seed: 1, ff: 99999, champ: 99999 },
   "Gonzaga":    { seed: 3, ff: 99999, champ: 99999 },
   "Louisville":  { seed: 6, ff: 99999, champ: 99999 },
@@ -1924,8 +1920,8 @@ function renderOutlook() {
 
   return `
     <div style="margin-bottom:24px;">
-      <h2 style="font-size:22px;margin-bottom:4px;">Post-R32 Outlook — Sweet 16</h2>
-      <p style="color:var(--muted);font-size:13px;">Win probabilities based on 10,000 Monte Carlo simulations using current scores + projected remaining points (player PPG × survival probability from post-R32 Vegas odds, updated March 23).</p>
+      <h2 style="font-size:22px;margin-bottom:4px;">Post-S16 Outlook — Elite 8 Day</h2>
+      <p style="color:var(--muted);font-size:13px;">Win probabilities based on 10,000 Monte Carlo simulations using current scores + projected remaining points. Arizona & Illinois in Final Four. Michigan vs Tennessee LIVE, Duke vs UConn tonight. (Odds: Yahoo Sports, March 29)</p>
     </div>
 
     <div class="grid-3" style="margin-bottom:24px;">
@@ -2045,7 +2041,7 @@ function renderOutlook() {
     ` : ''}
 
     <div style="margin-top:16px;padding:12px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:12px;color:var(--muted);">
-      <strong style="color:var(--accent);">How it works:</strong> Each simulation projects remaining games using post-R32 Vegas odds (ESPN, March 23). Seed-based round-by-round survival rates adjusted by championship odds. Players score their season PPG ±40% variance per game. 10,000 simulations determine win probability.
+      <strong style="color:var(--accent);">How it works:</strong> Each simulation projects remaining games using post-S16 odds (Yahoo Sports, March 29). Seed-based round-by-round survival rates adjusted by championship odds. Players score their season PPG ±40% variance per game. 10,000 simulations determine win probability.
       <br><strong style="color:var(--accent);">Note:</strong> Probabilities update automatically as scores are tracked. Teams with more active players on strong tournament teams have higher upside.
     </div>
   `;
