@@ -1693,21 +1693,18 @@ function showToast(msg) {
 
 // ===== OUTLOOK / SIMULATION =====
 
-// Post-S16 / Elite 8 updated odds (March 29 2026, via Yahoo Sports)
-// FINAL FOUR LOCKED: Arizona (W), Illinois (S)
-// Elite 8 TODAY: Michigan vs Tennessee (LIVE — Michigan dominating),
-//               Duke vs UConn (tonight)
-// Houston (2) upset by Illinois! Iowa State upset by Tennessee!
+// Final Four odds (March 30 2026, via ESPN/Yahoo Sports)
+// FF: Arizona vs Michigan, UConn vs Illinois
+// Duke eliminated by UConn buzzer-beater! Michigan crushed Tennessee.
 const COLLEGE_ODDS = {
-  // FINAL FOUR (already through)
+  // FINAL FOUR
   "Arizona":    { seed: 1, ff: -900,  champ: 165 },
-  "Illinois":   { seed: 3, ff: -900,  champ: 550 },
-  // ELITE 8 TODAY
-  "Michigan":   { seed: 1, ff: -300,  champ: 300 },
-  "Duke":       { seed: 1, ff: 110,   champ: 320 },
-  "UConn":      { seed: 2, ff: 400,   champ: 1500 },
-  "Tennessee":  { seed: 6, ff: 800,   champ: 3500 },
+  "Michigan":   { seed: 1, ff: -900,  champ: 180 },
+  "Illinois":   { seed: 3, ff: -900,  champ: 475 },
+  "UConn":      { seed: 2, ff: -900,  champ: 700 },
   // ELIMINATED — handled by state.eliminated
+  "Duke":       { seed: 1, ff: 99999, champ: 99999 },
+  "Tennessee":  { seed: 6, ff: 99999, champ: 99999 },
   "St Johns":   { seed: 5, ff: 99999, champ: 99999 },
   "MSU":        { seed: 3, ff: 99999, champ: 99999 },
   "Alabama":    { seed: 4, ff: 99999, champ: 99999 },
@@ -1929,8 +1926,8 @@ function renderOutlook() {
 
   return `
     <div style="margin-bottom:24px;">
-      <h2 style="font-size:22px;margin-bottom:4px;">Post-S16 Outlook — Elite 8 Day</h2>
-      <p style="color:var(--muted);font-size:13px;">Win probabilities based on 10,000 Monte Carlo simulations using current scores + projected remaining points. Arizona & Illinois in Final Four. Michigan vs Tennessee LIVE, Duke vs UConn tonight. (Odds: Yahoo Sports, March 29)</p>
+      <h2 style="font-size:22px;margin-bottom:4px;">Final Four Outlook</h2>
+      <p style="color:var(--muted);font-size:13px;">Win probabilities based on 10,000 Monte Carlo simulations. Final Four: Arizona vs Michigan, UConn vs Illinois. Duke eliminated by UConn buzzer-beater! (Odds: ESPN/Yahoo, March 30)</p>
     </div>
 
     <div class="grid-3" style="margin-bottom:24px;">
@@ -2050,7 +2047,7 @@ function renderOutlook() {
     ` : ''}
 
     <div style="margin-top:16px;padding:12px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:12px;color:var(--muted);">
-      <strong style="color:var(--accent);">How it works:</strong> Each simulation projects remaining games using post-S16 odds (Yahoo Sports, March 29). Seed-based round-by-round survival rates adjusted by championship odds. Players score with realistic tournament variance (normal distribution, stddev ~55% of PPG). 10,000 simulations determine win probability.
+      <strong style="color:var(--accent);">How it works:</strong> Each simulation projects remaining games using Final Four odds (ESPN/Yahoo, March 30). Seed-based round-by-round survival rates adjusted by championship odds. Players score with realistic tournament variance (normal distribution, stddev ~55% of PPG). 10,000 simulations determine win probability.
       <br><strong style="color:var(--accent);">Note:</strong> Probabilities update automatically as scores are tracked. Teams with more active players on strong tournament teams have higher upside.
     </div>
   `;
